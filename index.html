@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>idyll — your trip, handled</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,400;1,9..144,500&family=Karla:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+:root{--ink:#0F2830;--sea:#14586E;--azure:#2E8FAD;--mist:#DCE8EA;--sun:#E2A23B;--sun-deep:#B87E22;--paper:#F5F3EB;--card:#fff;--line:#C9D6D8;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Karla',sans-serif;background:var(--paper);color:var(--ink);-webkit-font-smoothing:antialiased;}
+.shell{max-width:880px;margin:0 auto;padding:24px 20px 80px;}
+.brand{display:flex;align-items:baseline;gap:10px;padding:8px 0 22px;}
+.brand-mark{font-family:'Fraunces',serif;font-weight:700;font-size:22px;letter-spacing:-.02em;}
+.brand-mark span{color:var(--azure);}
+.brand-tag{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--sea);}
+.hidden{display:none!important;}
+/* hero */
+.hero{padding:36px 0 8px;}
+.hero h1{font-family:'Fraunces',serif;font-weight:600;font-size:clamp(34px,6vw,56px);line-height:1.05;letter-spacing:-.02em;}
+.hero h1 em{font-style:italic;color:var(--sea);}
+.hero p{margin-top:18px;font-size:17px;line-height:1.6;max-width:560px;color:#33555E;}
+.cta{margin-top:28px;display:inline-flex;gap:10px;background:var(--ink);color:var(--paper);border:none;cursor:pointer;font:700 16px 'Karla',sans-serif;padding:15px 26px;border-radius:999px;transition:background .15s,transform .15s;}
+.cta:hover{background:var(--sea);transform:translateY(-1px);}
+.cta:focus-visible,.chip:focus-visible,.next:focus-visible,.back:focus-visible{outline:3px solid var(--sun);outline-offset:3px;}
+.hero-note{margin-top:16px;font-size:13px;color:#5E7A80;}
+/* quiz */
+.progress{display:flex;gap:6px;margin:6px 0 26px;}
+.progress i{height:4px;flex:1;background:var(--mist);border-radius:2px;}
+.progress i.on{background:var(--azure);}
+.eyebrow{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--sun-deep);font-weight:700;}
+.step-title{font-family:'Fraunces',serif;font-weight:600;font-size:clamp(26px,4.5vw,36px);margin-top:6px;}
+.step-sub{margin-top:8px;color:#4A6970;font-size:15px;line-height:1.55;max-width:520px;}
+.field{margin-top:26px;}
+.label{display:block;font-weight:700;font-size:14px;margin-bottom:8px;}
+.label small{font-weight:400;color:#5E7A80;}
+.input,.textarea{width:100%;background:var(--card);border:1.5px solid var(--line);border-radius:12px;padding:13px 15px;font:15px 'Karla',sans-serif;color:var(--ink);}
+.input:focus,.textarea:focus{outline:none;border-color:var(--azure);box-shadow:0 0 0 3px rgba(46,143,173,.15);}
+.textarea{min-height:120px;resize:vertical;line-height:1.55;}
+.textarea.big{min-height:170px;}
+.chips{display:flex;flex-wrap:wrap;gap:9px;}
+.chip{border:1.5px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;padding:9px 16px;font:500 14px 'Karla',sans-serif;cursor:pointer;transition:all .12s;}
+.chip:hover{border-color:var(--azure);}
+.chip.on{background:var(--sea);border-color:var(--sea);color:#fff;}
+.row{display:flex;gap:14px;flex-wrap:wrap;}
+.row>div{flex:1;min-width:180px;}
+.slider-wrap{display:flex;align-items:center;gap:14px;}
+.slider-wrap span{font-size:13px;color:#5E7A80;white-space:nowrap;}
+input[type=range]{flex:1;accent-color:var(--sea);}
+.nav{display:flex;justify-content:space-between;align-items:center;margin-top:36px;}
+.back{background:none;border:none;color:#5E7A80;font:15px 'Karla',sans-serif;cursor:pointer;padding:10px;}
+.back:hover{color:var(--ink);}
+.next{background:var(--ink);color:var(--paper);border:none;cursor:pointer;font:700 15px 'Karla',sans-serif;padding:13px 26px;border-radius:999px;transition:background .15s;}
+.next:hover{background:var(--sea);}
+.next.gold{background:var(--sun-deep);}
+.next.gold:hover{background:var(--sun);color:var(--ink);}
+/* loading */
+.loading{padding:80px 0;text-align:center;}
+.compass{width:52px;height:52px;margin:0 auto 22px;border-radius:50%;border:3px solid var(--mist);border-top-color:var(--azure);animation:spin 1s linear infinite;}
+@media (prefers-reduced-motion:reduce){.compass{animation:none;}}
+@keyframes spin{to{transform:rotate(360deg);}}
+.loading h2{font-family:'Fraunces',serif;font-size:24px;font-weight:600;}
+.loading p{margin-top:8px;color:#5E7A80;font-size:14px;}
+/* dossier */
+.dossier{background:var(--ink);color:var(--paper);border-radius:18px;padding:30px 28px;position:relative;overflow:hidden;}
+.dossier::after{content:"";position:absolute;right:-40px;top:-40px;width:180px;height:180px;border:2px dashed rgba(245,243,235,.25);border-radius:50%;}
+.dossier .eyebrow{color:var(--sun);}
+.dossier-title{font-family:'Fraunces',serif;font-weight:600;font-size:clamp(26px,5vw,40px);margin-top:8px;line-height:1.1;}
+.dossier-meta{margin-top:12px;font-size:14px;color:var(--mist);}
+.dossier-summary{margin-top:14px;font-size:15px;line-height:1.6;color:#E6EDEE;max-width:600px;}
+.section{margin-top:38px;}
+.section-title{font-family:'Fraunces',serif;font-weight:600;font-size:24px;display:flex;align-items:center;gap:10px;}
+.section-title::after{content:"";flex:1;border-top:2px dashed var(--line);}
+.hotel{background:var(--card);border:1.5px solid var(--line);border-radius:16px;padding:22px;margin-top:16px;}
+.hotel.primary{border-color:var(--sun);border-width:2px;box-shadow:0 6px 24px rgba(15,40,48,.06);}
+.hotel-top{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:baseline;}
+.hotel h3{font-family:'Fraunces',serif;font-weight:600;font-size:20px;}
+.hotel-area{font-size:13px;color:#5E7A80;margin-top:2px;}
+.price{font-weight:700;color:var(--sea);font-size:15px;white-space:nowrap;}
+.badge{display:inline-block;background:var(--sun);color:var(--ink);font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;border-radius:999px;padding:4px 10px;margin-bottom:10px;}
+.matches{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;}
+.match{font-size:12px;background:var(--mist);color:var(--sea);border-radius:999px;padding:4px 10px;font-weight:700;}
+.note{font-family:'Fraunces',serif;font-style:italic;font-size:15.5px;line-height:1.55;color:var(--sea);margin-top:12px;padding-left:14px;border-left:3px solid var(--sun);}
+.note::before{content:"✎ ";color:var(--sun-deep);font-style:normal;}
+.hotel-actions{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap;}
+.book{background:var(--sea);color:#fff;text-decoration:none;font-weight:700;font-size:14px;padding:10px 18px;border-radius:999px;display:inline-block;}
+.book:hover{background:var(--azure);}
+.veto{background:none;border:1.5px solid var(--line);color:#5E7A80;font:700 14px 'Karla',sans-serif;padding:10px 18px;border-radius:999px;cursor:pointer;}
+.veto:hover{border-color:var(--ink);color:var(--ink);}
+.veto:disabled{opacity:.5;cursor:wait;}
+.backups{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-top:14px;}
+.day{background:var(--card);border:1.5px solid var(--line);border-radius:16px;padding:20px 22px;margin-top:14px;display:flex;gap:18px;}
+.day-num{font-family:'Fraunces',serif;font-weight:700;font-size:15px;color:var(--sun-deep);writing-mode:vertical-rl;letter-spacing:.12em;text-transform:uppercase;border-right:2px dashed var(--line);padding-right:14px;flex-shrink:0;}
+.day-body h4{font-family:'Fraunces',serif;font-weight:600;font-size:18px;}
+.day-part{margin-top:9px;font-size:14.5px;line-height:1.55;}
+.day-part b{color:var(--sea);font-size:12px;letter-spacing:.1em;text-transform:uppercase;margin-right:6px;}
+.food{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px;margin-top:16px;}
+.food-card{background:var(--card);border:1.5px solid var(--line);border-radius:14px;padding:18px;}
+.food-card h4{font-family:'Fraunces',serif;font-weight:600;font-size:17px;}
+.food-type{font-size:12px;color:var(--sun-deep);font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-top:3px;}
+.food-card p{font-size:14px;line-height:1.5;margin-top:8px;color:#33555E;}
+.map-link{display:inline-block;margin-top:10px;font-size:13px;font-weight:700;color:var(--sea);text-decoration:none;}
+.map-link:hover{text-decoration:underline;}
+.tweak{background:var(--card);border:2px dashed var(--line);border-radius:16px;padding:22px;margin-top:38px;}
+.tweak h3{font-family:'Fraunces',serif;font-weight:600;font-size:20px;}
+.tweak p{font-size:14px;color:#5E7A80;margin:6px 0 12px;}
+.tweak-row{display:flex;gap:10px;flex-wrap:wrap;}
+.tweak-row input{flex:1;min-width:220px;}
+.errbox{background:#FBEDE7;border:1.5px solid #E2A78F;border-radius:14px;padding:20px;margin-top:24px;}
+.errbox h3{font-family:'Fraunces',serif;font-size:18px;}
+.errbox p{font-size:14px;margin-top:6px;line-height:1.5;word-break:break-word;}
+.restart{background:none;border:none;color:#5E7A80;font:14px 'Karla',sans-serif;cursor:pointer;margin-top:30px;text-decoration:underline;}
+</style>
+</head>
+<body>
+<div class="shell">
+  <header class="brand">
+    <div class="brand-mark">idy<span>ll</span></div>
+    <div class="brand-tag">your trip, handled</div>
+  </header>
+
+  <!-- INTRO -->
+  <section id="view-intro" class="hero">
+    <h1>Be on the trip.<br /><em>Not in the tabs.</em></h1>
+    <p>Answer a short quiz about your tastes and budget — then your agent chooses the hotel, plans your days, and picks where you eat. You just show up, together.</p>
+    <button class="cta" onclick="startQuiz()">Brief my agent →</button>
+    <p class="hero-note">Takes about 2 minutes. Every pick comes with the agent's reasoning — veto anything with one tap.</p>
+  </section>
+
+  <!-- QUIZ -->
+  <section id="view-quiz" class="hidden">
+    <div class="progress" id="progress" aria-hidden="true"></div>
+
+    <div class="qstep" data-step="0">
+      <div class="eyebrow">Step 1 of 5</div>
+      <h2 class="step-title">Where are we sending you?</h2>
+      <p class="step-sub">Know the place, or let your agent pick. Either works.</p>
+      <div class="field">
+        <label class="label" for="destination">Destination <small>— city or region</small></label>
+        <input id="destination" class="input" placeholder="e.g. Istanbul, Türkiye — or leave blank" />
+        <div style="margin-top:10px">
+          <button type="button" class="chip" id="flexchip" onclick="toggleFlex()">I'm flexible — surprise me</button>
+        </div>
+      </div>
+      <div class="field row">
+        <div><label class="label" for="origin">Flying from</label><input id="origin" class="input" placeholder="e.g. Los Angeles" /></div>
+        <div><label class="label" for="nights">Nights</label><input id="nights" class="input" type="number" min="1" max="30" value="4" /></div>
+      </div>
+      <div class="field">
+        <label class="label" for="timing">When? <small>— rough is fine</small></label>
+        <input id="timing" class="input" placeholder="e.g. mid-September, or 'sometime this fall'" />
+      </div>
+      <div class="field row">
+        <div><label class="label">Who's going?</label><div class="chips" id="chips-travelers"></div></div>
+        <div><label class="label" for="groupSize">How many people?</label><input id="groupSize" class="input" type="number" min="1" max="20" value="2" /></div>
+      </div>
+    </div>
+
+    <div class="qstep hidden" data-step="1">
+      <div class="eyebrow">Step 2 of 5</div>
+      <h2 class="step-title">Money talk.</h2>
+      <p class="step-sub">No judgment either way — this just tells your agent where to aim.</p>
+      <div class="field"><label class="label">Budget style</label><div class="chips" id="chips-budget"></div></div>
+      <div class="field">
+        <label class="label" for="budgetNumber">Rough total budget <small>— optional, any currency</small></label>
+        <input id="budgetNumber" class="input" placeholder="e.g. $2,500 for the two of us, hotels + fun" />
+      </div>
+      <div class="field"><label class="label">Worth splurging on <small>— pick any</small></label><div class="chips" id="chips-splurge"></div></div>
+    </div>
+
+    <div class="qstep hidden" data-step="2">
+      <div class="eyebrow">Step 3 of 5</div>
+      <h2 class="step-title">What's the vibe?</h2>
+      <p class="step-sub">Pick everything that sounds like this trip.</p>
+      <div class="field"><label class="label">This trip should feel…</label><div class="chips" id="chips-vibes"></div></div>
+      <div class="field">
+        <label class="label" for="pace">Pace</label>
+        <div class="slider-wrap"><span>Long breakfasts</span><input id="pace" type="range" min="1" max="5" value="3" /><span>See everything</span></div>
+      </div>
+    </div>
+
+    <div class="qstep hidden" data-step="3">
+      <div class="eyebrow">Step 4 of 5</div>
+      <h2 class="step-title">Food &amp; where you sleep.</h2>
+      <p class="step-sub">The two things that can make or break a trip.</p>
+      <div class="field"><label class="label">Eating style</label><div class="chips" id="chips-foodStyle"></div></div>
+      <div class="field">
+        <label class="label" for="dietary">Dietary needs or food notes <small>— optional</small></label>
+        <input id="dietary" class="input" placeholder="e.g. vegetarian; one of us hates seafood; coffee is sacred" />
+      </div>
+      <div class="field"><label class="label">Stay type <small>— pick any</small></label><div class="chips" id="chips-stayType"></div></div>
+      <div class="field"><label class="label">Non-negotiables <small>— pick any</small></label><div class="chips" id="chips-mustHaves"></div></div>
+    </div>
+
+    <div class="qstep hidden" data-step="4">
+      <div class="eyebrow">Step 5 of 5 — the important one</div>
+      <h2 class="step-title">Brief your agent.</h2>
+      <p class="step-sub">Type anything, in your own words. This is what your agent reads most carefully — the more you tell it, the better it chooses for you.</p>
+      <div class="field">
+        <label class="label" for="brief">Tell your agent everything</label>
+        <textarea id="brief" class="textarea big" placeholder="e.g. It's our anniversary. My boyfriend gets bored in museums but loves markets and rooftops. I want one really special dinner. We'd rather have one perfect neighborhood than see the whole city. Mornings are slow for us."></textarea>
+      </div>
+      <div class="field">
+        <label class="label" for="dealbreakers">Dealbreakers <small>— what should your agent avoid at all costs?</small></label>
+        <textarea id="dealbreakers" class="textarea" placeholder="e.g. no hostels, no clubs, nothing that requires renting a car, no 6am starts"></textarea>
+      </div>
+    </div>
+
+    <div class="nav">
+      <button class="back" onclick="goBack()">← Back</button>
+      <button class="next" id="nextBtn" onclick="goNext()">Continue</button>
+    </div>
+  </section>
+
+  <!-- LOADING -->
+  <section id="view-loading" class="loading hidden">
+    <div class="compass" aria-hidden="true"></div>
+    <h2 id="loadMsg">Reading your brief…</h2>
+    <p>Your agent is making real choices, not listing options. ~20 seconds.</p>
+  </section>
+
+  <!-- ERROR -->
+  <section id="view-error" class="hidden">
+    <div class="errbox" role="alert">
+      <h3>Turbulence.</h3>
+      <p id="errMsg"></p>
+      <div class="hotel-actions">
+        <button class="next" onclick="generate()">Try again</button>
+        <button class="veto" onclick="restart()">Start over</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- RESULT -->
+  <section id="view-result" class="hidden">
+    <div id="resultBody"></div>
+    <div class="tweak">
+      <h3>Change something?</h3>
+      <p>Tell your agent in plain words and it'll redo the plan — e.g. "more beach time" or "cheaper hotel, fancier dinners".</p>
+      <div class="tweak-row">
+        <input id="tweakInput" class="input" placeholder="What should change?" />
+        <button class="next" onclick="doTweak()">Redo the plan</button>
+      </div>
+    </div>
+    <button class="restart" onclick="restart()">Start a completely new trip</button>
+  </section>
+</div>
+
+<script>
+/* ---------- data ---------- */
+const OPTS = {
+  travelers: ["Couple","Friends","Solo","Family"],
+  budget: ["Shoestring","Comfortable","Treat ourselves","No limits"],
+  splurge: ["The stay","Food & drinks","Experiences","Getting there"],
+  vibes: ["Romantic","Adventurous","Cultural","Foodie","Nightlife","Nature","Beach & pool","Off the beaten path","Wellness & slow","Shopping"],
+  foodStyle: ["Stick to what we know","A bit of both","Take us anywhere"],
+  stayType: ["Boutique hotel","Well-known hotel","Apartment","Resort","B&B / guesthouse","Surprise me"],
+  mustHaves: ["Walkable location","Great view","Pool","Quiet at night","Breakfast included","Kitchen","Gym","Spa"],
+};
+const MULTI = new Set(["splurge","vibes","stayType","mustHaves"]);
+const form = {
+  destination:"", flexible:false, origin:"", nights:4, timing:"",
+  travelers:"Couple", groupSize:2, budget:"Comfortable", budgetNumber:"",
+  splurge:[], vibes:[], pace:3, dietary:"", foodStyle:"A bit of both",
+  stayType:[], mustHaves:[], dealbreakers:"", brief:"",
+};
+let step = 0, plan = null;
+const TOTAL = 5;
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+/* ---------- chips ---------- */
+function buildChips(field){
+  const box = $("chips-"+field);
+  box.innerHTML = "";
+  OPTS[field].forEach(o=>{
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "chip"; b.textContent = o;
+    b.setAttribute("aria-pressed","false");
+    b.onclick = () => {
+      if (MULTI.has(field)){
+        const i = form[field].indexOf(o);
+        i === -1 ? form[field].push(o) : form[field].splice(i,1);
+      } else { form[field] = o; }
+      paintChips(field);
+    };
+    box.appendChild(b);
+  });
+  paintChips(field);
+}
+function paintChips(field){
+  [...$("chips-"+field).children].forEach(b=>{
+    const on = MULTI.has(field) ? form[field].includes(b.textContent) : form[field] === b.textContent;
+    b.classList.toggle("on", on);
+    b.setAttribute("aria-pressed", on);
+  });
+}
+Object.keys(OPTS).forEach(buildChips);
+function toggleFlex(){ form.flexible = !form.flexible; $("flexchip").classList.toggle("on", form.flexible); }
+
+/* ---------- views & nav ---------- */
+function show(view){
+  ["intro","quiz","loading","error","result"].forEach(v => $("view-"+v).classList.toggle("hidden", v !== view));
+  window.scrollTo({top:0});
+}
+function paintStep(){
+  document.querySelectorAll(".qstep").forEach(s => s.classList.toggle("hidden", Number(s.dataset.step) !== step));
+  $("progress").innerHTML = Array.from({length:TOTAL},(_,i)=>`<i class="${i<=step?"on":""}"></i>`).join("");
+  const btn = $("nextBtn");
+  btn.textContent = step === TOTAL-1 ? "Plan my trip ✦" : "Continue";
+  btn.classList.toggle("gold", step === TOTAL-1);
+}
+function startQuiz(){ step = 0; paintStep(); show("quiz"); }
+function goBack(){ step === 0 ? show("intro") : (step--, paintStep()); }
+function goNext(){ step === TOTAL-1 ? (readInputs(), generate()) : (step++, paintStep()); }
+function readInputs(){
+  ["destination","origin","timing","budgetNumber","dietary","brief","dealbreakers"].forEach(k => form[k] = $(k).value.trim());
+  form.nights = Math.max(1, Number($("nights").value)||1);
+  form.groupSize = Math.max(1, Number($("groupSize").value)||1);
+  form.pace = Number($("pace").value);
+}
+function restart(){ location.reload(); }
+
+/* ---------- API ---------- */
+async function callAgent(payload){
+  const res = await fetch("/.netlify/functions/plan", {
+    method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  if (!res.ok || data.error) throw new Error(data.error || ("Request failed: " + res.status));
+  return data;
+}
+async function generate(extra){
+  show("loading");
+  try{
+    $("loadMsg").textContent = "Choosing where you'll stay…";
+    const part1 = await callAgent({ action:"hotels", form, extra });
+    $("loadMsg").textContent = "Mapping out your days…";
+    const part2 = await callAgent({
+      action:"days", form, extra,
+      destination: part1.destination,
+      hotelName: part1.hotels?.[0]?.name
+    });
+    plan = { ...part1, ...part2 };
+    renderResult();
+    show("result");
+  }catch(e){
+    $("errMsg").textContent = e.message + " — this is usually temporary. If it persists, check your Netlify function logs and API key.";
+    show("error");
+  }
+}
+async function vetoPrimary(btn){
+  btn.disabled = true; btn.textContent = "Finding another…";
+  try{
+    const out = await callAgent({
+      action:"veto", form,
+      destination: plan.destination,
+      rejected: plan.hotels.map(h=>h.name).join("; ")
+    });
+    plan.hotels = [out.hotel, ...plan.hotels.slice(1)];
+    renderResult();
+  }catch(e){ btn.disabled = false; btn.textContent = "Not this one"; }
+}
+function doTweak(){
+  const t = $("tweakInput").value.trim();
+  if (t){ $("tweakInput").value=""; generate(t); }
+}
+$("tweakInput") && ($("tweakInput").onkeydown = e => { if(e.key==="Enter") doTweak(); });
+
+/* ---------- render ---------- */
+const bookingLink = (h,d) => "https://www.booking.com/searchresults.html?ss=" + encodeURIComponent(h+" "+(d||""));
+const mapsLink = (p,d) => "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(p+" "+(d||""));
+
+function hotelCard(h, primary){
+  return `<div class="hotel ${primary?"primary":""}">
+    ${primary?'<span class="badge">Your agent\\'s pick</span>':""}
+    <div class="hotel-top">
+      <div><h3${primary?"":' style="font-size:17px"'}>${esc(h.name)}</h3>
+      <div class="hotel-area">${esc(h.area)}${h.style?" · "+esc(h.style):""}</div></div>
+      <div class="price">${esc(h.pricePerNight)}${primary?"/night":""}</div>
+    </div>
+    ${h.why?`<p class="note">${esc(h.why)}</p>`:""}
+    ${primary && h.matches?.length ? `<div class="matches">${h.matches.map(m=>`<span class="match">✓ ${esc(m)}</span>`).join("")}</div>`:""}
+    <div class="hotel-actions">
+      <a class="book" target="_blank" rel="noreferrer" href="${bookingLink(h.name, plan.destination)}">${primary?"Check rates &amp; book →":"Book →"}</a>
+      ${primary?'<button class="veto" onclick="vetoPrimary(this)">Not this one</button>':""}
+    </div>
+  </div>`;
+}
+function renderResult(){
+  const p = plan;
+  let html = `<div class="dossier">
+    <div class="eyebrow">Trip dossier · prepared by your agent</div>
+    <div class="dossier-title">${esc(p.tripTitle || p.destination)}</div>
+    <div class="dossier-meta">${esc(p.destination)} · ${form.nights} nights · ${esc(form.travelers.toLowerCase())}${form.timing?" · "+esc(form.timing):""}</div>
+    ${p.summary?`<p class="dossier-summary">${esc(p.summary)}</p>`:""}
+  </div>`;
+
+  if (p.hotels?.length){
+    html += `<div class="section"><h2 class="section-title">Where you'll stay</h2>`;
+    html += hotelCard(p.hotels[0], true);
+    if (p.hotels.length > 1) html += `<div class="backups">${p.hotels.slice(1).map(h=>hotelCard(h,false)).join("")}</div>`;
+    html += `</div>`;
+  }
+  if (p.days?.length){
+    html += `<div class="section"><h2 class="section-title">Your days, mapped</h2>` + p.days.map(d=>`
+      <div class="day"><div class="day-num">Day ${esc(d.d)}</div>
+      <div class="day-body"><h4>${esc(d.title)}</h4>
+      ${d.morning?`<p class="day-part"><b>AM</b>${esc(d.morning)}</p>`:""}
+      ${d.afternoon?`<p class="day-part"><b>PM</b>${esc(d.afternoon)}</p>`:""}
+      ${d.evening?`<p class="day-part"><b>Eve</b>${esc(d.evening)}</p>`:""}
+      ${d.note?`<p class="note" style="font-size:14px">${esc(d.note)}</p>`:""}
+      </div></div>`).join("") + `</div>`;
+  }
+  if (p.food?.length){
+    html += `<div class="section"><h2 class="section-title">Where you'll eat</h2><div class="food">` + p.food.map(f=>`
+      <div class="food-card"><h4>${esc(f.name)}</h4><div class="food-type">${esc(f.type)}</div>
+      <p>${esc(f.why)}</p>
+      <a class="map-link" target="_blank" rel="noreferrer" href="${mapsLink(f.name, p.destination)}">Open in Maps →</a></div>`).join("") + `</div></div>`;
+  }
+  $("resultBody").innerHTML = html;
+}
+</script>
+</body>
+</html>
