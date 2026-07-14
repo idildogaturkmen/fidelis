@@ -1,2 +1,2 @@
 # fidelis
-Travel, plannign app with AI
+Travel, planning app with AI
