@@ -116,6 +116,21 @@ input[type=range]{flex:1;accent-color:var(--sea);}
 .errbox h3{font-family:'Fraunces',serif;font-size:18px;}
 .errbox p{font-size:14px;margin-top:6px;line-height:1.5;word-break:break-word;}
 .restart{background:none;border:none;color:#5E7A80;font:14px 'Karla',sans-serif;cursor:pointer;margin-top:30px;text-decoration:underline;}
+/* progressive result + extra links */
+.pending{background:var(--card);border:1.5px dashed var(--line);border-radius:16px;padding:26px;margin-top:16px;text-align:center;color:#5E7A80;font-size:14px;line-height:1.5;}
+.pending .compass{width:34px;height:34px;margin:0 auto 12px;}
+.book.alt{background:none;border:1.5px solid var(--sea);color:var(--sea);}
+.map-link.reviews{align-self:center;}
+.food-addr{font-size:12.5px;color:#5E7A80;margin-top:6px;}
+.food-links{display:flex;gap:12px;flex-wrap:wrap;margin-top:10px;}
+.tweak.share{border-style:solid;border-color:var(--sun);}
+/* waitlist */
+.waitlist{margin-top:36px;max-width:480px;background:var(--card);border:1.5px solid var(--line);border-radius:16px;padding:20px;}
+.waitlist-row{display:flex;gap:10px;flex-wrap:wrap;}
+.waitlist-row .input{flex:1;min-width:200px;}
+.waitlist-row .next{white-space:nowrap;}
+.waitlist-note{margin-top:10px;font-size:13px;color:#5E7A80;}
+.waitlist-done{font-weight:700;color:var(--sea);font-size:15px;}
 </style>
 </head>
 <body>
@@ -131,6 +146,17 @@ input[type=range]{flex:1;accent-color:var(--sea);}
     <p>Answer a short quiz about your tastes and budget — then your agent chooses the hotel, plans your days, and picks where you eat. You just show up, together.</p>
     <button class="cta" onclick="startQuiz()">Brief my agent →</button>
     <p class="hero-note">Takes about 2 minutes. Every pick comes with the agent's reasoning — veto anything with one tap.</p>
+
+    <form class="waitlist" name="waitlist" method="POST" data-netlify="true" netlify-honeypot="bot-field" onsubmit="joinWaitlist(event)">
+      <input type="hidden" name="form-name" value="waitlist" />
+      <p class="hidden" aria-hidden="true"><label>Leave this empty: <input name="bot-field" tabindex="-1" autocomplete="off" /></label></p>
+      <label class="label" for="waitlistEmail">Get fidelis for your next trip</label>
+      <div class="waitlist-row">
+        <input id="waitlistEmail" class="input" name="email" type="email" required placeholder="you@email.com" />
+        <button class="next" type="submit">Join the waitlist</button>
+      </div>
+      <p class="waitlist-note" id="waitlistNote">Free while fidelis is in early access — no spam, ever.</p>
+    </form>
   </section>
 
   <!-- QUIZ -->
@@ -183,6 +209,7 @@ input[type=range]{flex:1;accent-color:var(--sea);}
         <label class="label" for="pace">Pace</label>
         <div class="slider-wrap"><span>Long breakfasts</span><input id="pace" type="range" min="1" max="5" value="3" /><span>See everything</span></div>
       </div>
+      <div class="field"><label class="label">Getting around <small>— how do you like to move?</small></label><div class="chips" id="chips-transport"></div></div>
     </div>
 
     <div class="qstep hidden" data-step="3">
@@ -196,12 +223,14 @@ input[type=range]{flex:1;accent-color:var(--sea);}
       </div>
       <div class="field"><label class="label">Stay type <small>— pick any</small></label><div class="chips" id="chips-stayType"></div></div>
       <div class="field"><label class="label">Non-negotiables <small>— pick any</small></label><div class="chips" id="chips-mustHaves"></div></div>
+      <div class="field"><label class="label">Room specifics <small>— pets, smoking, beds, access</small></label><div class="chips" id="chips-roomNeeds"></div></div>
     </div>
 
     <div class="qstep hidden" data-step="4">
       <div class="eyebrow">Step 5 of 5 — the important one</div>
       <h2 class="step-title">Brief your agent.</h2>
       <p class="step-sub">Type anything, in your own words. This is what your agent reads most carefully — the more you tell it, the better it chooses for you.</p>
+      <div class="field"><label class="label">What's the occasion? <small>— optional</small></label><div class="chips" id="chips-occasion"></div></div>
       <div class="field">
         <label class="label" for="brief">Tell your agent everything</label>
         <textarea id="brief" class="textarea big" placeholder="e.g. It's our anniversary. My boyfriend gets bored in museums but loves markets and rooftops. I want one really special dinner. We'd rather have one perfect neighborhood than see the whole city. Mornings are slow for us."></textarea>
@@ -222,7 +251,7 @@ input[type=range]{flex:1;accent-color:var(--sea);}
   <section id="view-loading" class="loading hidden">
     <div class="compass" aria-hidden="true"></div>
     <h2 id="loadMsg">Reading your brief…</h2>
-    <p>Your agent is making real choices, not listing options. ~20 seconds.</p>
+    <p>Your agent is making real choices, not listing options. Your hotel pick lands first — the day-by-day plan follows right after.</p>
   </section>
 
   <!-- ERROR -->
@@ -240,6 +269,11 @@ input[type=range]{flex:1;accent-color:var(--sea);}
   <!-- RESULT -->
   <section id="view-result" class="hidden">
     <div id="resultBody"></div>
+    <div class="tweak share">
+      <h3>Love it? Send it to your travel partner</h3>
+      <p>Copy the whole dossier as text — paste it into WhatsApp, iMessage, wherever you two plan things.</p>
+      <button class="next" onclick="copyPlan(this)">Copy this trip</button>
+    </div>
     <div class="tweak">
       <h3>Change something?</h3>
       <p>Tell your agent in plain words and it'll redo the plan — e.g. "more beach time" or "cheaper hotel, fancier dinners".</p>
@@ -262,18 +296,33 @@ const OPTS = {
   foodStyle: ["Stick to what we know","A bit of both","Take us anywhere"],
   stayType: ["Boutique hotel","Well-known hotel","Apartment","Resort","B&B / guesthouse","Surprise me"],
   mustHaves: ["Walkable location","Great view","Pool","Quiet at night","Breakfast included","Kitchen","Gym","Spa"],
+  roomNeeds: ["Non-smoking","Smoking-friendly","Bringing a pet","Separate beds","Step-free / accessible","Connecting rooms"],
+  transport: ["Mostly walking","Public transit","Taxis / rideshare","Renting a car"],
+  occasion: ["Just because","Anniversary","Honeymoon","Birthday","Proposal","Celebrating something"],
 };
-const MULTI = new Set(["splurge","vibes","stayType","mustHaves"]);
+const MULTI = new Set(["splurge","vibes","stayType","mustHaves","roomNeeds"]);
 const form = {
   destination:"", flexible:false, origin:"", nights:4, timing:"",
   travelers:"Couple", groupSize:2, budget:"Comfortable", budgetNumber:"",
   splurge:[], vibes:[], pace:3, dietary:"", foodStyle:"A bit of both",
-  stayType:[], mustHaves:[], dealbreakers:"", brief:"",
+  stayType:[], mustHaves:[], roomNeeds:[], transport:"", occasion:"",
+  dealbreakers:"", brief:"",
 };
 let step = 0, plan = null;
 const TOTAL = 5;
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+/* ---------- analytics: first-party event log, no cookies, no personal data ---------- */
+const SID = Math.random().toString(36).slice(2, 10);
+function track(event){
+  try{
+    fetch("/.netlify/functions/track", {
+      method:"POST", headers:{"content-type":"application/json"},
+      body: JSON.stringify({ event, sid: SID }), keepalive:true
+    }).catch(()=>{});
+  }catch(_){}
+}
 
 /* ---------- chips ---------- */
 function buildChips(field){
@@ -316,9 +365,12 @@ function paintStep(){
   btn.textContent = step === TOTAL-1 ? "Plan my trip ✦" : "Continue";
   btn.classList.toggle("gold", step === TOTAL-1);
 }
-function startQuiz(){ step = 0; paintStep(); show("quiz"); }
+function startQuiz(){ step = 0; paintStep(); show("quiz"); track("quiz_started"); }
 function goBack(){ step === 0 ? show("intro") : (step--, paintStep()); }
-function goNext(){ step === TOTAL-1 ? (readInputs(), generate()) : (step++, paintStep()); }
+function goNext(){
+  if (step === TOTAL-1){ track("quiz_completed"); readInputs(); generate(); }
+  else { step++; paintStep(); }
+}
 function readInputs(){
   ["destination","origin","timing","budgetNumber","dietary","brief","dealbreakers"].forEach(k => form[k] = $(k).value.trim());
   form.nights = Math.max(1, Number($("nights").value)||1);
@@ -329,11 +381,24 @@ function restart(){ location.reload(); }
 
 /* ---------- API ---------- */
 async function callAgent(payload){
-  const res = await fetch("/.netlify/functions/plan", {
-    method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify(payload)
-  });
-  const data = await res.json();
-  if (!res.ok || data.error) throw new Error(data.error || ("Request failed: " + res.status));
+  let res;
+  try{
+    res = await fetch("/.netlify/functions/plan", {
+      method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify(payload)
+    });
+  }catch(_){
+    throw new Error(location.protocol === "file:"
+      ? "This is the local file preview — plan generation only works on the deployed site (fidelisapp.netlify.app) or via `netlify dev`."
+      : "We couldn't reach your agent — check your connection and try again.");
+  }
+  let data = null;
+  try{ data = await res.json(); }catch(_){}
+  if (!res.ok || !data || data.error){
+    if (!data){
+      throw new Error("We couldn't get a proper reply from the plan service. If you're viewing a local preview, generation only works on the deployed site (fidelisapp.netlify.app) — otherwise, try again in a moment.");
+    }
+    throw new Error(data.error || "Your agent hit some turbulence — nothing's wrong with your answers. Try again in a moment.");
+  }
   return data;
 }
 async function generate(extra){
@@ -341,19 +406,41 @@ async function generate(extra){
   try{
     $("loadMsg").textContent = "Choosing where you'll stay…";
     const part1 = await callAgent({ action:"hotels", form, extra });
-    $("loadMsg").textContent = "Mapping out your days…";
-    const part2 = await callAgent({
-      action:"days", form, extra,
-      destination: part1.destination,
-      hotelName: part1.hotels?.[0]?.name
-    });
-    plan = { ...part1, ...part2 };
+    plan = { ...part1, _daysPending: true };
     renderResult();
     show("result");
+    try{
+      const part2 = await callAgent({
+        action:"days", form, extra,
+        destination: part1.destination,
+        hotelName: part1.hotels?.[0]?.name
+      });
+      plan = { ...plan, ...part2, _daysPending: false };
+    }catch(err){
+      plan._daysPending = false;
+      plan._daysError = err.message;
+    }
+    renderResult();
+    track(extra ? "plan_redone" : "plan_generated");
   }catch(e){
-    $("errMsg").textContent = e.message + " — this is usually temporary. If it persists, check your Netlify function logs and API key.";
+    $("errMsg").textContent = e.message;
     show("error");
   }
+}
+async function retryDays(){
+  plan._daysError = null; plan._daysPending = true; renderResult();
+  try{
+    const part2 = await callAgent({
+      action:"days", form,
+      destination: plan.destination,
+      hotelName: plan.hotels?.[0]?.name
+    });
+    plan = { ...plan, ...part2, _daysPending: false };
+  }catch(err){
+    plan._daysPending = false;
+    plan._daysError = err.message;
+  }
+  renderResult();
 }
 async function vetoPrimary(btn){
   btn.disabled = true; btn.textContent = "Finding another…";
@@ -365,6 +452,7 @@ async function vetoPrimary(btn){
     });
     plan.hotels = [out.hotel, ...plan.hotels.slice(1)];
     renderResult();
+    track("hotel_veto_used");
   }catch(e){ btn.disabled = false; btn.textContent = "Not this one"; }
 }
 function doTweak(){
@@ -373,22 +461,86 @@ function doTweak(){
 }
 $("tweakInput") && ($("tweakInput").onkeydown = e => { if(e.key==="Enter") doTweak(); });
 
+/* ---------- share ---------- */
+function planAsText(){
+  const p = plan; if (!p) return "";
+  const lines = [];
+  lines.push(`${p.tripTitle || p.destination} — planned by fidelis`);
+  lines.push(`${p.destination} · ${form.nights} nights${form.timing ? " · " + form.timing : ""}`);
+  if (p.summary) lines.push("", p.summary);
+  if (p.hotels?.length){
+    const h = p.hotels[0];
+    lines.push("", `STAY: ${h.name} (${h.area}, ${h.pricePerNight}/night)`);
+    if (h.address) lines.push(h.address);
+    if (h.why) lines.push(h.why);
+    if (p.hotels.length > 1) lines.push("Backups: " + p.hotels.slice(1).map(x=>x.name).join(" · "));
+  }
+  (p.days || []).forEach(d=>{
+    lines.push("", `DAY ${d.d} — ${d.title}`);
+    if (d.morning) lines.push(`AM: ${d.morning}`);
+    if (d.afternoon) lines.push(`PM: ${d.afternoon}`);
+    if (d.evening) lines.push(`EVE: ${d.evening}`);
+  });
+  if (p.food?.length){
+    lines.push("", "EAT:");
+    p.food.forEach(f=>lines.push(`• ${f.name} (${f.type})${f.address ? " — " + f.address : ""}`));
+  }
+  lines.push("", "Made with fidelis — fidelisapp.netlify.app");
+  return lines.join("\n");
+}
+async function copyPlan(btn){
+  try{
+    await navigator.clipboard.writeText(planAsText());
+    btn.textContent = "Copied ✓";
+    track("plan_copied");
+  }catch(_){
+    btn.textContent = "Couldn't copy — try again";
+  }
+  setTimeout(()=>{ btn.textContent = "Copy this trip"; }, 2500);
+}
+
+/* ---------- waitlist ---------- */
+async function joinWaitlist(e){
+  e.preventDefault();
+  const f = e.target, btn = f.querySelector("button");
+  btn.disabled = true; btn.textContent = "Joining…";
+  try{
+    const res = await fetch("/", {
+      method:"POST", headers:{"content-type":"application/x-www-form-urlencoded"},
+      body: new URLSearchParams(new FormData(f)).toString()
+    });
+    if (!res.ok) throw new Error();
+    track("waitlist_signup");
+    f.innerHTML = `<p class="waitlist-done">You're on the list ✓ — we'll email you when it's your turn.</p>`;
+  }catch(_){
+    btn.disabled = false; btn.textContent = "Join the waitlist";
+    $("waitlistNote").textContent = "That didn't go through — mind trying once more?";
+  }
+}
+
 /* ---------- render ---------- */
 const bookingLink = (h,d) => "https://www.booking.com/searchresults.html?ss=" + encodeURIComponent(h+" "+(d||""));
-const mapsLink = (p,d) => "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(p+" "+(d||""));
+const compareLink = (h,d) => "https://www.google.com/travel/search?q=" + encodeURIComponent(h+" "+(d||""));
+const tripadvisorLink = (q) => "https://www.tripadvisor.com/Search?q=" + encodeURIComponent(q);
+const yelpLink = (n,d) => "https://www.yelp.com/search?find_desc=" + encodeURIComponent(n) + "&find_loc=" + encodeURIComponent(d||"");
+const mapsLink = (p,addr,d) => "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent([p, addr, d].filter(Boolean).join(", "));
 
 function hotelCard(h, primary){
+  const dest = plan.destination;
   return `<div class="hotel ${primary?"primary":""}">
     ${primary?'<span class="badge">Your agent\'s pick</span>':""}
     <div class="hotel-top">
       <div><h3${primary?"":' style="font-size:17px"'}>${esc(h.name)}</h3>
-      <div class="hotel-area">${esc(h.area)}${h.style?" · "+esc(h.style):""}</div></div>
+      <div class="hotel-area">${esc(h.area)}${h.style?" · "+esc(h.style):""}</div>
+      ${h.address?`<div class="hotel-area">${esc(h.address)}</div>`:""}</div>
       <div class="price">${esc(h.pricePerNight)}${primary?"/night":""}</div>
     </div>
     ${h.why?`<p class="note">${esc(h.why)}</p>`:""}
     ${primary && h.matches?.length ? `<div class="matches">${h.matches.map(m=>`<span class="match">✓ ${esc(m)}</span>`).join("")}</div>`:""}
     <div class="hotel-actions">
-      <a class="book" target="_blank" rel="noreferrer" href="${bookingLink(h.name, plan.destination)}">${primary?"Check rates &amp; book →":"Book →"}</a>
+      <a class="book" target="_blank" rel="noreferrer" onclick="track('booking_link_clicked')" href="${compareLink(h.name, dest)}">${primary?"Compare prices →":"Compare →"}</a>
+      <a class="book alt" target="_blank" rel="noreferrer" onclick="track('booking_link_clicked')" href="${bookingLink(h.name, dest)}">Booking.com</a>
+      <a class="map-link reviews" target="_blank" rel="noreferrer" href="${tripadvisorLink(h.name+" "+(dest||""))}">Reviews →</a>
       ${primary?'<button class="veto" onclick="vetoPrimary(this)">Not this one</button>':""}
     </div>
   </div>`;
@@ -408,6 +560,15 @@ function renderResult(){
     if (p.hotels.length > 1) html += `<div class="backups">${p.hotels.slice(1).map(h=>hotelCard(h,false)).join("")}</div>`;
     html += `</div>`;
   }
+  if (p._daysPending){
+    html += `<div class="section"><h2 class="section-title">Your days, mapped</h2>
+      <div class="pending"><div class="compass" aria-hidden="true"></div>
+      <p>Your agent is mapping your days and picking where you'll eat — they'll appear right here in a moment.</p></div></div>`;
+  } else if (p._daysError){
+    html += `<div class="section"><h2 class="section-title">Your days, mapped</h2>
+      <div class="errbox"><p>${esc(p._daysError)}</p>
+      <div class="hotel-actions"><button class="next" onclick="retryDays()">Map my days</button></div></div></div>`;
+  }
   if (p.days?.length){
     html += `<div class="section"><h2 class="section-title">Your days, mapped</h2>` + p.days.map(d=>`
       <div class="day"><div class="day-num">Day ${esc(d.d)}</div>
@@ -422,7 +583,12 @@ function renderResult(){
     html += `<div class="section"><h2 class="section-title">Where you'll eat</h2><div class="food">` + p.food.map(f=>`
       <div class="food-card"><h4>${esc(f.name)}</h4><div class="food-type">${esc(f.type)}</div>
       <p>${esc(f.why)}</p>
-      <a class="map-link" target="_blank" rel="noreferrer" href="${mapsLink(f.name, p.destination)}">Open in Maps →</a></div>`).join("") + `</div></div>`;
+      ${f.address?`<p class="food-addr">${esc(f.address)}</p>`:""}
+      <div class="food-links">
+        <a class="map-link" target="_blank" rel="noreferrer" href="${mapsLink(f.name, f.address, p.destination)}">Maps →</a>
+        <a class="map-link" target="_blank" rel="noreferrer" href="${tripadvisorLink(f.name+" "+(p.destination||""))}">TripAdvisor</a>
+        <a class="map-link" target="_blank" rel="noreferrer" href="${yelpLink(f.name, p.destination)}">Yelp</a>
+      </div></div>`).join("") + `</div></div>`;
   }
   $("resultBody").innerHTML = html;
 }
