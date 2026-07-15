@@ -124,6 +124,23 @@ input[type=range]{flex:1;accent-color:var(--sea);}
 .food-addr{font-size:12.5px;color:#5E7A80;margin-top:6px;}
 .food-links{display:flex;gap:12px;flex-wrap:wrap;margin-top:10px;}
 .tweak.share{border-style:solid;border-color:var(--sun);}
+.share-out{margin-top:12px;}
+.gstars{font-size:12.5px;font-weight:700;color:var(--sun-deep);margin-top:4px;}
+.day-bookings{margin-top:10px;display:flex;flex-direction:column;gap:5px;}
+.ticket{font-size:13px;font-weight:700;color:var(--sea);text-decoration:none;}
+.ticket:hover{text-decoration:underline;}
+.ticket-tip{font-size:12px;color:#5E7A80;margin-left:8px;}
+.mytrips{margin-left:auto;font:700 13px 'Karla',sans-serif;color:var(--sea);text-decoration:none;}
+.mytrips:hover{text-decoration:underline;}
+.trip-item{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;background:var(--card);border:1.5px solid var(--line);border-radius:14px;padding:16px 18px;margin-top:12px;text-decoration:none;color:var(--ink);}
+.trip-item:hover{border-color:var(--azure);}
+.trip-item span{color:#5E7A80;font-size:13px;}
+@media print{
+  .mytrips,.tweak,.restart,.veto,.waitlist,.nav,.progress{display:none!important;}
+  body{background:#fff;}
+  .dossier{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .shell{max-width:100%;padding:0;}
+}
 /* waitlist */
 .waitlist{margin-top:36px;max-width:480px;background:var(--card);border:1.5px solid var(--line);border-radius:16px;padding:20px;}
 .waitlist-row{display:flex;gap:10px;flex-wrap:wrap;}
@@ -138,6 +155,7 @@ input[type=range]{flex:1;accent-color:var(--sea);}
   <header class="brand">
     <div class="brand-mark">fide<span>lis</span></div>
     <div class="brand-tag">your trip, handled</div>
+    <a id="myTripsLink" class="mytrips hidden" href="#" onclick="openMyTrips(event)">My trips</a>
   </header>
 
   <!-- INTRO -->
@@ -270,9 +288,18 @@ input[type=range]{flex:1;accent-color:var(--sea);}
   <section id="view-result" class="hidden">
     <div id="resultBody"></div>
     <div class="tweak share">
-      <h3>Love it? Send it to your travel partner</h3>
-      <p>Copy the whole dossier as text — paste it into WhatsApp, iMessage, wherever you two plan things.</p>
-      <button class="next" onclick="copyPlan(this)">Copy this trip</button>
+      <h3>Keep this trip</h3>
+      <p>Get a link to send to your travel partner, download it as a PDF, or copy it as plain text.</p>
+      <div class="tweak-row">
+        <button class="next" onclick="saveTrip(this)">Save &amp; get link</button>
+        <button class="next" onclick="downloadPdf()">Download PDF</button>
+        <button class="veto" onclick="copyPlan(this)">Copy as text</button>
+      </div>
+      <div class="share-out hidden" id="shareOut">
+        <input class="input" id="shareUrl" readonly onclick="this.select()" />
+        <p class="waitlist-note">Link copied — anyone with it opens this exact dossier.</p>
+      </div>
+      <div id="accountBox"></div>
     </div>
     <div class="tweak">
       <h3>Change something?</h3>
@@ -284,8 +311,34 @@ input[type=range]{flex:1;accent-color:var(--sea);}
     </div>
     <button class="restart" onclick="restart()">Start a completely new trip</button>
   </section>
+
+  <!-- MY TRIPS -->
+  <section id="view-trips" class="hidden">
+    <div class="eyebrow">Saved to your account</div>
+    <h2 class="step-title">My trips</h2>
+    <div id="tripsBody"></div>
+    <div class="nav">
+      <button class="back" onclick="show('intro')">← Home</button>
+      <button class="back" onclick="signOutUser()">Sign out</button>
+    </div>
+  </section>
 </div>
 
+<script>
+/* Backend config — safe to publish: the anon key is public by design; all
+   security lives in Supabase row-level-security policies (supabase/schema.sql). */
+const SUPABASE_URL = "";      // e.g. https://abcd1234.supabase.co
+const SUPABASE_ANON_KEY = ""; // Supabase → Project settings → API → "anon public" key
+</script>
+<script type="module">
+if (SUPABASE_URL && SUPABASE_ANON_KEY){
+  try{
+    const { createClient } = await import("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm");
+    window.sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  }catch(e){ console.warn("fidelis: Supabase client failed to load", e); }
+}
+window.dispatchEvent(new Event("sb-ready"));
+</script>
 <script>
 /* ---------- data ---------- */
 const OPTS = {
@@ -355,7 +408,7 @@ function toggleFlex(){ form.flexible = !form.flexible; $("flexchip").classList.t
 
 /* ---------- views & nav ---------- */
 function show(view){
-  ["intro","quiz","loading","error","result"].forEach(v => $("view-"+v).classList.toggle("hidden", v !== view));
+  ["intro","quiz","loading","error","result","trips"].forEach(v => $("view-"+v).classList.toggle("hidden", v !== view));
   window.scrollTo({top:0});
 }
 function paintStep(){
@@ -377,7 +430,7 @@ function readInputs(){
   form.groupSize = Math.max(1, Number($("groupSize").value)||1);
   form.pace = Number($("pace").value);
 }
-function restart(){ location.reload(); }
+function restart(){ location.href = "/"; }
 
 /* ---------- API ---------- */
 async function callAgent(payload){
@@ -499,17 +552,117 @@ async function copyPlan(btn){
   setTimeout(()=>{ btn.textContent = "Copy this trip"; }, 2500);
 }
 
+/* ---------- backend: save, share link, accounts (Supabase) ---------- */
+async function saveTrip(btn){
+  if (!plan) return;
+  if (!window.sb){
+    const t0 = btn.textContent;
+    btn.textContent = "Saving isn't set up yet";
+    setTimeout(()=>{ btn.textContent = t0; }, 2500);
+    return;
+  }
+  const t0 = btn.textContent;
+  btn.disabled = true; btn.textContent = "Saving…";
+  try{
+    const { data: { session } } = await sb.auth.getSession();
+    const { data, error } = await sb.from("trips").insert({
+      title: plan.tripTitle || plan.destination || "Trip",
+      destination: plan.destination || null,
+      data: { plan, form: { ...form } },
+      user_id: session?.user?.id ?? null
+    }).select("id").single();
+    if (error) throw error;
+    const url = location.origin + "/?t=" + data.id;
+    $("shareUrl").value = url;
+    $("shareOut").classList.remove("hidden");
+    try{ await navigator.clipboard.writeText(url); }catch(_){}
+    track("trip_saved");
+    btn.textContent = session ? "Saved to My trips ✓" : "Link ready ✓";
+  }catch(_){
+    btn.textContent = "Couldn't save — try again";
+  }
+  btn.disabled = false;
+  setTimeout(()=>{ btn.textContent = t0; }, 3000);
+}
+async function loadSharedTrip(id){
+  if (!window.sb) return;
+  try{
+    const { data, error } = await sb.rpc("get_trip", { trip_id: id });
+    if (error || !data) throw error || new Error("not found");
+    plan = data.data.plan;
+    if (data.data.form) Object.assign(form, data.data.form);
+    renderResult(); show("result");
+  }catch(_){
+    $("errMsg").textContent = "That trip link doesn't seem to work — it may have been deleted.";
+    show("error");
+  }
+}
+async function openMyTrips(e){
+  if (e) e.preventDefault();
+  if (!window.sb) return;
+  const { data, error } = await sb.from("trips").select("id,title,destination,created_at").order("created_at", { ascending: false });
+  const box = $("tripsBody");
+  box.innerHTML = (error || !data || !data.length)
+    ? `<p class="step-sub">No saved trips yet — plan one, then hit "Save &amp; get link".</p>`
+    : data.map(t=>`<a class="trip-item" href="/?t=${t.id}"><b>${esc(t.title)}</b><span>${esc(t.destination||"")} · ${new Date(t.created_at).toLocaleDateString()}</span></a>`).join("");
+  show("trips");
+}
+async function signIn(e){
+  e.preventDefault();
+  if (!window.sb) return;
+  const email = ($("authEmail").value || "").trim();
+  if (!email) return;
+  const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin } });
+  $("authNote").textContent = error
+    ? "Couldn't send the link — try again in a minute."
+    : "Check your email — we sent you a sign-in link.";
+}
+async function signOutUser(){
+  if (window.sb) await sb.auth.signOut();
+  location.href = "/";
+}
+function updateAuthUI(session){
+  $("myTripsLink").classList.toggle("hidden", !session);
+  const box = $("accountBox");
+  if (!box || !window.sb){ if (box) box.innerHTML = ""; return; }
+  box.innerHTML = session
+    ? `<p class="waitlist-note">Signed in as ${esc(session.user.email)} — saved trips land in <a href="#" onclick="openMyTrips(event)">My trips</a>.</p>`
+    : `<form class="tweak-row" style="margin-top:12px" onsubmit="signIn(event)">
+        <input id="authEmail" class="input" type="email" required placeholder="you@email.com" />
+        <button class="next" type="submit">Sign in to keep trips</button>
+      </form>
+      <p class="waitlist-note" id="authNote">No password — we email you a magic sign-in link, and saved trips get an account.</p>`;
+}
+window.addEventListener("sb-ready", async () => {
+  if (window.sb){
+    const { data: { session } } = await sb.auth.getSession();
+    updateAuthUI(session);
+    sb.auth.onAuthStateChange((_ev, s) => updateAuthUI(s));
+  } else {
+    updateAuthUI(null);
+  }
+  const sharedId = new URLSearchParams(location.search).get("t");
+  if (sharedId) loadSharedTrip(sharedId);
+});
+function downloadPdf(){ track("pdf_downloaded"); window.print(); }
+
 /* ---------- waitlist ---------- */
 async function joinWaitlist(e){
   e.preventDefault();
   const f = e.target, btn = f.querySelector("button");
   btn.disabled = true; btn.textContent = "Joining…";
   try{
-    const res = await fetch("/", {
-      method:"POST", headers:{"content-type":"application/x-www-form-urlencoded"},
-      body: new URLSearchParams(new FormData(f)).toString()
-    });
-    if (!res.ok) throw new Error();
+    if (window.sb){
+      const email = String(new FormData(f).get("email") || "").trim();
+      const { error } = await sb.from("waitlist").insert({ email });
+      if (error && error.code !== "23505") throw error; // duplicate email still counts as joined
+    } else {
+      const res = await fetch("/", {
+        method:"POST", headers:{"content-type":"application/x-www-form-urlencoded"},
+        body: new URLSearchParams(new FormData(f)).toString()
+      });
+      if (!res.ok) throw new Error();
+    }
     track("waitlist_signup");
     f.innerHTML = `<p class="waitlist-done">You're on the list ✓ — we'll email you when it's your turn.</p>`;
   }catch(_){
@@ -524,6 +677,9 @@ const compareLink = (h,d) => "https://www.google.com/travel/search?q=" + encodeU
 const tripadvisorLink = (q) => "https://www.tripadvisor.com/Search?q=" + encodeURIComponent(q);
 const yelpLink = (n,d) => "https://www.yelp.com/search?find_desc=" + encodeURIComponent(n) + "&find_loc=" + encodeURIComponent(d||"");
 const mapsLink = (p,addr,d) => "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent([p, addr, d].filter(Boolean).join(", "));
+const gygLink = (q,d) => "https://www.getyourguide.com/s/?q=" + encodeURIComponent(q+" "+(d||""));
+const placeMaps = (x,d) => x.mapsUrl ? esc(x.mapsUrl) : mapsLink(x.name, x.address, d);
+const stars = x => x.rating ? `<div class="gstars">★ ${esc(x.rating)}${x.ratingCount?` · ${esc(x.ratingCount)} Google reviews`:""}</div>` : "";
 
 function hotelCard(h, primary){
   const dest = plan.destination;
@@ -532,7 +688,8 @@ function hotelCard(h, primary){
     <div class="hotel-top">
       <div><h3${primary?"":' style="font-size:17px"'}>${esc(h.name)}</h3>
       <div class="hotel-area">${esc(h.area)}${h.style?" · "+esc(h.style):""}</div>
-      ${h.address?`<div class="hotel-area">${esc(h.address)}</div>`:""}</div>
+      ${h.address?`<div class="hotel-area">${esc(h.address)}</div>`:""}
+      ${stars(h)}</div>
       <div class="price">${esc(h.pricePerNight)}${primary?"/night":""}</div>
     </div>
     ${h.why?`<p class="note">${esc(h.why)}</p>`:""}
@@ -540,6 +697,7 @@ function hotelCard(h, primary){
     <div class="hotel-actions">
       <a class="book" target="_blank" rel="noreferrer" onclick="track('booking_link_clicked')" href="${compareLink(h.name, dest)}">${primary?"Compare prices →":"Compare →"}</a>
       <a class="book alt" target="_blank" rel="noreferrer" onclick="track('booking_link_clicked')" href="${bookingLink(h.name, dest)}">Booking.com</a>
+      <a class="map-link reviews" target="_blank" rel="noreferrer" href="${placeMaps(h, dest)}">Maps</a>
       <a class="map-link reviews" target="_blank" rel="noreferrer" href="${tripadvisorLink(h.name+" "+(dest||""))}">Reviews →</a>
       ${primary?'<button class="veto" onclick="vetoPrimary(this)">Not this one</button>':""}
     </div>
@@ -577,16 +735,17 @@ function renderResult(){
       ${d.afternoon?`<p class="day-part"><b>PM</b>${esc(d.afternoon)}</p>`:""}
       ${d.evening?`<p class="day-part"><b>Eve</b>${esc(d.evening)}</p>`:""}
       ${d.note?`<p class="note" style="font-size:14px">${esc(d.note)}</p>`:""}
+      ${(d.bookings&&d.bookings.length)?`<div class="day-bookings">${d.bookings.map(b=>`<div class="ticket-row"><a class="ticket" target="_blank" rel="noreferrer" onclick="track('booking_link_clicked')" href="${gygLink(b.what, p.destination)}">🎟 Get tickets: ${esc(b.what)} →</a>${b.tip?`<span class="ticket-tip">${esc(b.tip)}</span>`:""}</div>`).join("")}</div>`:""}
       </div></div>`).join("") + `</div>`;
   }
   if (p.food?.length){
     html += `<div class="section"><h2 class="section-title">Where you'll eat</h2><div class="food">` + p.food.map(f=>`
       <div class="food-card"><h4>${esc(f.name)}</h4><div class="food-type">${esc(f.type)}</div>
+      ${stars(f)}
       <p>${esc(f.why)}</p>
       ${f.address?`<p class="food-addr">${esc(f.address)}</p>`:""}
       <div class="food-links">
-        <a class="map-link" target="_blank" rel="noreferrer" href="${mapsLink(f.name, f.address, p.destination)}">Maps →</a>
-        <a class="map-link" target="_blank" rel="noreferrer" href="${tripadvisorLink(f.name+" "+(p.destination||""))}">TripAdvisor</a>
+        <a class="map-link" target="_blank" rel="noreferrer" href="${placeMaps(f, p.destination)}">Maps →</a>
         <a class="map-link" target="_blank" rel="noreferrer" href="${yelpLink(f.name, p.destination)}">Yelp</a>
       </div></div>`).join("") + `</div></div>`;
   }

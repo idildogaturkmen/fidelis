@@ -10,6 +10,8 @@ const EVENTS = new Set([
   "booking_link_clicked",
   "plan_redone",
   "plan_copied",
+  "trip_saved",
+  "pdf_downloaded",
   "waitlist_signup",
 ]);
 

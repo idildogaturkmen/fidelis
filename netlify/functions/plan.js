@@ -94,8 +94,8 @@ ${profile}${extra}
 They are staying at: ${str(body.hotelName, 120) || "a central hotel"} in ${destination}. Trip length: ${f.nights} nights.
 
 Respond ONLY with valid JSON, no markdown. Schema:
-{"days":[cover the WHOLE trip; if longer than 7 days, group some (e.g. "4-5"); each {"d":"1","title":"short day theme","morning":"specific plan, under 22 words","afternoon":"under 22 words","evening":"under 22 words","note":"one insider tip, under 18 words"}],"food":[5 items, real places in ${destination}, each {"name":"the restaurant's exact name as it appears on Google Maps","address":"street address","type":"cuisine / meal","why":"under 15 words, tied to their tastes"}]}
-Every restaurant must be a real, currently-operating place that locals and reputable travel guides consistently praise — never invent one; if unsure it still operates, choose one you are certain about. Favor beloved spots over tourist traps, and say in the day plan when something needs booking ahead. Match their pace (${f.pace}/5) and vibes. Keep it tight.`;
+{"days":[cover the WHOLE trip; if longer than 7 days, group some (e.g. "4-5"); each {"d":"1","title":"short day theme","morning":"specific, practical plan, under 30 words — name places, best times, how to get there","afternoon":"under 30 words","evening":"under 30 words","note":"one insider tip, under 20 words — timing tricks, dress codes, what to skip","bookings":[0-3 items ONLY where advance tickets or reservations genuinely matter, each {"what":"attraction or experience name","tip":"under 12 words, e.g. 'timed entry — book 2-3 days ahead'"}]}],"food":[5 items, real places in ${destination}, each {"name":"the restaurant's exact name as it appears on Google Maps","address":"street address","type":"cuisine / meal","why":"under 15 words, tied to their tastes"}]}
+Every restaurant must be a real, currently-operating place that locals and reputable travel guides consistently praise — never invent one; if unsure it still operates, choose one you are certain about. Favor beloved spots over tourist traps. Match their pace (${f.pace}/5) and vibes. Keep it tight.`;
   }
 
   if (action === "veto") {
@@ -145,6 +145,42 @@ async function askClaude(prompt, key) {
   return JSON.parse(clean.slice(s, e + 1));
 }
 
+/* ---------- optional Places enrichment ----------
+   When GOOGLE_MAPS_API_KEY is set (Netlify env var; needs "Places API (New)"
+   enabled), every hotel/restaurant gets its canonical Google Maps URL and live
+   rating. Best-effort: any failure leaves the search-link fallback in place. */
+async function resolvePlaces(out, key, cityHint) {
+  if (!key || !out) return out;
+  const enrich = async (item) => {
+    try {
+      const res = await fetch("https://places.googleapis.com/v1/places:searchText", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "X-Goog-Api-Key": key,
+          "X-Goog-FieldMask": "places.googleMapsUri,places.rating,places.userRatingCount",
+        },
+        body: JSON.stringify({
+          textQuery: [item.name, item.address, cityHint].filter(Boolean).join(", "),
+          pageSize: 1,
+        }),
+        signal: AbortSignal.timeout(2500),
+      });
+      if (!res.ok) return;
+      const p = (await res.json()).places?.[0];
+      if (!p) return;
+      if (p.googleMapsUri) item.mapsUrl = p.googleMapsUri;
+      if (p.rating) { item.rating = p.rating; item.ratingCount = p.userRatingCount; }
+    } catch { /* enrichment must never break a plan */ }
+  };
+  const jobs = [];
+  for (const h of out.hotels || []) jobs.push(enrich(h));
+  if (out.hotel) jobs.push(enrich(out.hotel));
+  for (const f of out.food || []) jobs.push(enrich(f));
+  await Promise.all(jobs);
+  return out;
+}
+
 const err = (status, error) => Response.json({ error }, { status });
 
 export default async (req, context) => {
@@ -181,6 +217,7 @@ export default async (req, context) => {
     const prompt = buildPrompt(body.action, form, body);
     if (!prompt) return err(400, "Unknown action");
     const out = await askClaude(prompt, key);
+    await resolvePlaces(out, process.env.GOOGLE_MAPS_API_KEY, out.destination || str(body.destination, 120));
     return Response.json(out);
   } catch (e) {
     if (e instanceof FriendlyError) return err(502, e.message);
