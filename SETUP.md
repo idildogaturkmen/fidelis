@@ -43,10 +43,25 @@ Netlify → **Site configuration → Forms → Enable form detection**, then
 redeploy. Once Supabase is configured the waitlist writes to the database
 instead and this toggle stops mattering.
 
-## Branded sign-in email (2 minutes)
+## Branded sign-in email
 
-Supabase → **Authentication → Email Templates** → paste this into **both**
-"Confirm signup" and "Magic Link" (subject and body):
+**Supabase's free tier locks template editing until custom SMTP is set up**
+(their anti-spam rule). Quick free path — send through Gmail:
+
+1. Google Account → Security → enable **2-Step Verification** → search
+   "App passwords" → create one named `fidelis supabase` (16-char code).
+2. Supabase → **Authentication → Emails → SMTP Settings** → enable, then:
+   sender email = your Gmail, sender name = `fidelis`, host =
+   `smtp.gmail.com`, port = `465`, username = your Gmail, password = the
+   App Password (never your real password). Save.
+3. The Templates tab unlocks — paste the subject + body below into **both**
+   "Confirm signup" and "Magic Link".
+
+Later, for the official look: buy a domain, point it at Netlify (site URL)
+and at a free Resend account (SMTP) — emails then come from
+`hello@yourdomain.com` instead of a Gmail address.
+
+**Subject and body to paste:**
 
 **Subject:** `Your fidelis sign-in link ✈️`
 
@@ -62,8 +77,8 @@ Supabase → **Authentication → Email Templates** → paste this into **both**
 </div>
 ```
 
-To make the email arrive *from* fidelis instead of Supabase, later add custom
-SMTP (Supabase → Authentication → SMTP settings; Resend has a free tier).
+
+
 
 ## Affiliate/commission notes (when you're ready)
 
