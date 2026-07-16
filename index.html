@@ -565,14 +565,18 @@ async function saveTrip(btn){
   btn.disabled = true; btn.textContent = "Saving…";
   try{
     const { data: { session } } = await sb.auth.getSession();
-    const { data, error } = await sb.from("trips").insert({
+    // id is generated client-side: reading the row back after insert would be
+    // blocked by RLS for anonymous saves (they're readable only via get_trip).
+    const id = crypto.randomUUID();
+    const { error } = await sb.from("trips").insert({
+      id,
       title: plan.tripTitle || plan.destination || "Trip",
       destination: plan.destination || null,
       data: { plan, form: { ...form } },
       user_id: session?.user?.id ?? null
-    }).select("id").single();
+    });
     if (error) throw error;
-    const url = location.origin + "/?t=" + data.id;
+    const url = location.origin + "/?t=" + id;
     $("shareUrl").value = url;
     $("shareOut").classList.remove("hidden");
     try{ await navigator.clipboard.writeText(url); }catch(_){}
