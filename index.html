@@ -130,6 +130,8 @@ input[type=range]{flex:1;accent-color:var(--sea);}
 .ticket{font-size:13px;font-weight:700;color:var(--sea);text-decoration:none;}
 .ticket:hover{text-decoration:underline;}
 .ticket-tip{font-size:12px;color:#5E7A80;margin-left:8px;}
+.ticket-alt{font-size:12px;font-weight:700;color:var(--sun-deep);text-decoration:none;margin-left:10px;}
+.ticket-alt:hover{text-decoration:underline;}
 .mytrips{margin-left:auto;font:700 13px 'Karla',sans-serif;color:var(--sea);text-decoration:none;}
 .mytrips:hover{text-decoration:underline;}
 .trip-item{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;background:var(--card);border:1.5px solid var(--line);border-radius:14px;padding:16px 18px;margin-top:12px;text-decoration:none;color:var(--ink);}
@@ -474,6 +476,7 @@ async function generate(extra){
       plan._daysError = err.message;
     }
     renderResult();
+    stashPlan();
     track(extra ? "plan_redone" : "plan_generated");
   }catch(e){
     $("errMsg").textContent = e.message;
@@ -494,17 +497,24 @@ async function retryDays(){
     plan._daysError = err.message;
   }
   renderResult();
+  stashPlan();
 }
 async function vetoPrimary(btn){
   btn.disabled = true; btn.textContent = "Finding another…";
   try{
+    const oldName = plan.hotels[0]?.name;
     const out = await callAgent({
       action:"veto", form,
       destination: plan.destination,
       rejected: plan.hotels.map(h=>h.name).join("; ")
     });
     plan.hotels = [out.hotel, ...plan.hotels.slice(1)];
+    if (oldName && out.hotel?.name && plan.days){
+      const swap = s => s ? s.split(oldName).join(out.hotel.name) : s;
+      plan.days = plan.days.map(d => ({ ...d, morning: swap(d.morning), afternoon: swap(d.afternoon), evening: swap(d.evening), note: swap(d.note) }));
+    }
     renderResult();
+    stashPlan();
     track("hotel_veto_used");
   }catch(e){ btn.disabled = false; btn.textContent = "Not this one"; }
 }
@@ -553,6 +563,36 @@ async function copyPlan(btn){
 }
 
 /* ---------- backend: save, share link, accounts (Supabase) ---------- */
+function stashPlan(){
+  try{ localStorage.setItem("fidelis_last_plan", JSON.stringify({ plan, form })); }catch(_){}
+}
+function rememberPendingTrip(id){
+  try{
+    const ids = JSON.parse(localStorage.getItem("fidelis_pending_trips") || "[]");
+    ids.push(id);
+    localStorage.setItem("fidelis_pending_trips", JSON.stringify(ids));
+  }catch(_){}
+}
+async function claimPendingTrips(session){
+  try{
+    const ids = JSON.parse(localStorage.getItem("fidelis_pending_trips") || "[]");
+    if (!ids.length) return;
+    const { error } = await sb.from("trips").update({ user_id: session.user.id }).is("user_id", null).in("id", ids);
+    if (!error) localStorage.removeItem("fidelis_pending_trips");
+  }catch(_){}
+}
+function restoreLastPlanIfIdle(){
+  if (plan) return;
+  if (new URLSearchParams(location.search).get("t")) return;
+  try{
+    const saved = JSON.parse(localStorage.getItem("fidelis_last_plan") || "null");
+    if (saved && saved.plan){
+      plan = saved.plan;
+      Object.assign(form, saved.form || {});
+      renderResult(); show("result");
+    }
+  }catch(_){}
+}
 async function saveTrip(btn){
   if (!plan) return;
   if (!window.sb){
@@ -576,6 +616,8 @@ async function saveTrip(btn){
       user_id: session?.user?.id ?? null
     });
     if (error) throw error;
+    if (!session) rememberPendingTrip(id); // claimed automatically if they sign in later
+    stashPlan();
     const url = location.origin + "/?t=" + id;
     $("shareUrl").value = url;
     $("shareOut").classList.remove("hidden");
@@ -641,7 +683,13 @@ window.addEventListener("sb-ready", async () => {
   if (window.sb){
     const { data: { session } } = await sb.auth.getSession();
     updateAuthUI(session);
-    sb.auth.onAuthStateChange((_ev, s) => updateAuthUI(s));
+    sb.auth.onAuthStateChange((ev, s) => {
+      updateAuthUI(s);
+      if (ev === "SIGNED_IN" && s){
+        claimPendingTrips(s);      // adopt trips saved before signing in
+        restoreLastPlanIfIdle();   // bring the plan back after the magic-link redirect
+      }
+    });
   } else {
     updateAuthUI(null);
   }
@@ -682,6 +730,7 @@ const tripadvisorLink = (q) => "https://www.tripadvisor.com/Search?q=" + encodeU
 const yelpLink = (n,d) => "https://www.yelp.com/search?find_desc=" + encodeURIComponent(n) + "&find_loc=" + encodeURIComponent(d||"");
 const mapsLink = (p,addr,d) => "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent([p, addr, d].filter(Boolean).join(", "));
 const gygLink = (q,d) => "https://www.getyourguide.com/s/?q=" + encodeURIComponent(q+" "+(d||""));
+const officialTicketsLink = (what,channel,d) => "https://www.google.com/search?q=" + encodeURIComponent([what, d, channel, "tickets"].filter(Boolean).join(" "));
 const placeMaps = (x,d) => x.mapsUrl ? esc(x.mapsUrl) : mapsLink(x.name, x.address, d);
 const stars = x => x.rating ? `<div class="gstars">★ ${esc(x.rating)}${x.ratingCount?` · ${esc(x.ratingCount)} Google reviews`:""}</div>` : "";
 
@@ -739,7 +788,7 @@ function renderResult(){
       ${d.afternoon?`<p class="day-part"><b>PM</b>${esc(d.afternoon)}</p>`:""}
       ${d.evening?`<p class="day-part"><b>Eve</b>${esc(d.evening)}</p>`:""}
       ${d.note?`<p class="note" style="font-size:14px">${esc(d.note)}</p>`:""}
-      ${(d.bookings&&d.bookings.length)?`<div class="day-bookings">${d.bookings.map(b=>`<div class="ticket-row"><a class="ticket" target="_blank" rel="noreferrer" onclick="track('booking_link_clicked')" href="${gygLink(b.what, p.destination)}">🎟 Get tickets: ${esc(b.what)} →</a>${b.tip?`<span class="ticket-tip">${esc(b.tip)}</span>`:""}</div>`).join("")}</div>`:""}
+      ${(d.bookings&&d.bookings.length)?`<div class="day-bookings">${d.bookings.map(b=>`<div class="ticket-row"><a class="ticket" target="_blank" rel="noreferrer" onclick="track('booking_link_clicked')" href="${officialTicketsLink(b.what, b.channel, p.destination)}">🎟 ${esc(b.what)}${b.channel?` — book via ${esc(b.channel)}`:""} →</a><a class="ticket-alt" target="_blank" rel="noreferrer" onclick="track('booking_link_clicked')" href="${gygLink(b.what, p.destination)}">GetYourGuide</a>${b.tip?`<span class="ticket-tip">${esc(b.tip)}</span>`:""}</div>`).join("")}</div>`:""}
       </div></div>`).join("") + `</div>`;
   }
   if (p.food?.length){

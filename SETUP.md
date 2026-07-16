@@ -43,6 +43,28 @@ Netlify → **Site configuration → Forms → Enable form detection**, then
 redeploy. Once Supabase is configured the waitlist writes to the database
 instead and this toggle stops mattering.
 
+## Branded sign-in email (2 minutes)
+
+Supabase → **Authentication → Email Templates** → paste this into **both**
+"Confirm signup" and "Magic Link" (subject and body):
+
+**Subject:** `Your fidelis sign-in link ✈️`
+
+```html
+<div style="font-family: Georgia, 'Times New Roman', serif; max-width: 480px; margin: 0 auto; padding: 32px 24px; color: #0F2830;">
+  <div style="font-size: 26px; font-weight: bold;">fide<span style="color:#2E8FAD;">lis</span></div>
+  <p style="font-size: 12px; letter-spacing: 2px; text-transform: uppercase; color: #14586E; margin-top: 2px;">your trip, handled</p>
+  <p style="font-size: 16px; line-height: 1.6; margin-top: 24px;">One tap and you're in — your saved trips will be waiting for you.</p>
+  <p style="margin: 28px 0;">
+    <a href="{{ .ConfirmationURL }}" style="background: #0F2830; color: #F5F3EB; text-decoration: none; font-weight: bold; padding: 14px 26px; border-radius: 999px; display: inline-block;">Sign in to fidelis</a>
+  </p>
+  <p style="font-size: 13px; color: #5E7A80; line-height: 1.5;">Didn't request this? You can safely ignore it — nobody can sign in without this email.</p>
+</div>
+```
+
+To make the email arrive *from* fidelis instead of Supabase, later add custom
+SMTP (Supabase → Authentication → SMTP settings; Resend has a free tier).
+
 ## Affiliate/commission notes (when you're ready)
 
 - **Booking.com** and **GetYourGuide** both have partner programs. The link

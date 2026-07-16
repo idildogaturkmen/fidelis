@@ -28,6 +28,11 @@ create policy "owners read own" on public.trips
 create policy "owners delete own" on public.trips
   for delete using (user_id = auth.uid());
 
+-- A signed-in user may claim trips that were saved anonymously (claiming
+-- requires knowing the trip id — i.e. having the link on your own device).
+create policy "claim anonymous trips" on public.trips
+  for update using (user_id is null) with check (user_id = auth.uid());
+
 -- Public share-link access goes through this function: knowing the id = having
 -- the link. The table itself is never publicly listable.
 create or replace function public.get_trip(trip_id uuid)
