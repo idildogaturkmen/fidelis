@@ -142,6 +142,8 @@ input[type=range]{flex:1;accent-color:var(--sea);}
 .city-why{margin-top:6px;color:#4A6970;font-size:14px;font-style:italic;}
 .leg{background:var(--mist);border-radius:14px;padding:14px 18px;margin-top:22px;font-size:14px;line-height:1.6;}
 .leg-tip{display:block;color:#4A6970;font-size:13px;}
+.worth{display:flex;flex-direction:column;gap:8px;margin-top:14px;}
+.worth-item{background:var(--card);border:1.5px solid var(--line);border-radius:12px;padding:12px 16px;font-size:14px;line-height:1.5;}
 .mytrips{margin-left:auto;font:700 13px 'Karla',sans-serif;color:var(--sea);text-decoration:none;}
 .mytrips:hover{text-decoration:underline;}
 .trip-item{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;background:var(--card);border:1.5px solid var(--line);border-radius:14px;padding:16px 18px;margin-top:12px;text-decoration:none;color:var(--ink);}
@@ -908,6 +910,7 @@ function foodHtml(food, dest){
 }
 const legHtml = l => `<div class="leg">🚆 <b>${esc(l.from)} → ${esc(l.to)}</b> · ${esc(l.mode)}${l.duration?" · "+esc(l.duration):""}${l.tip?`<span class="leg-tip">${esc(l.tip)}</span>`:""}
   <a class="ticket-alt" target="_blank" rel="noreferrer" onclick="track('booking_link_clicked')" href="${officialTicketsLink(l.from+" to "+l.to, l.mode, "")}">Find tickets →</a></div>`;
+const worthHtml = items => `<div class="section"><h2 class="section-title">Worth knowing</h2><div class="worth">${items.map(w=>`<div class="worth-item">💡 <b>${esc(w.item)}</b>${w.verdict?` — ${esc(w.verdict)}`:""}</div>`).join("")}</div></div>`;
 
 function renderResult(){
   const p = plan;
@@ -935,6 +938,7 @@ function renderResult(){
         if (!c._hotelsPending && c._daysPending) html += pendingBlock(`Mapping your days in ${esc((c.name||"").split(",")[0])}…`);
         if (c.days?.length) html += daysHtml(c.days, c.name);
         if (c.food?.length) html += foodHtml(c.food, c.name);
+        if (c.worthKnowing?.length) html += worthHtml(c.worthKnowing);
       }
       html += `</div>`;
       const leg = (p.legs||[])[ci];
@@ -959,6 +963,7 @@ function renderResult(){
   }
   if (p.days?.length) html += daysHtml(p.days, p.destination);
   if (p.food?.length) html += foodHtml(p.food, p.destination);
+  if (p.worthKnowing?.length) html += worthHtml(p.worthKnowing);
   $("resultBody").innerHTML = html;
 }
 </script>
