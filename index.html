@@ -132,6 +132,11 @@ input[type=range]{flex:1;accent-color:var(--sea);}
 .ticket-tip{font-size:12px;color:#5E7A80;margin-left:8px;}
 .ticket-alt{font-size:12px;font-weight:700;color:var(--sun-deep);text-decoration:none;margin-left:10px;}
 .ticket-alt:hover{text-decoration:underline;}
+.ticket.warn{color:var(--sun-deep);}
+.ticket-row-warn{background:#FDF3E3;border:1.5px solid var(--sun);border-radius:10px;padding:9px 12px;}
+.warn-tip{color:var(--sun-deep);font-weight:700;}
+.asap{background:#FDF3E3;border:2px solid var(--sun);border-radius:16px;padding:18px 20px;margin-top:18px;display:flex;flex-direction:column;gap:7px;}
+.asap-title{font-weight:700;font-size:15px;}
 .mytrips{margin-left:auto;font:700 13px 'Karla',sans-serif;color:var(--sea);text-decoration:none;}
 .mytrips:hover{text-decoration:underline;}
 .trip-item{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;background:var(--card);border:1.5px solid var(--line);border-radius:14px;padding:16px 18px;margin-top:12px;text-decoration:none;color:var(--ink);}
@@ -740,6 +745,25 @@ const gygLink = (q,d) => "https://www.getyourguide.com/s/?q=" + encodeURICompone
 const officialTicketsLink = (what,channel,d) => "https://www.google.com/search?q=" + encodeURIComponent([what, d, channel, "tickets"].filter(Boolean).join(" "));
 const placeMaps = (x,d) => x.mapsUrl ? esc(x.mapsUrl) : mapsLink(x.name, x.address, d);
 const stars = x => x.rating ? `<div class="gstars">★ ${esc(x.rating)}${x.ratingCount?` · ${esc(x.ratingCount)} Google reviews`:""}</div>` : "";
+const safeUrl = u => (typeof u === "string" && /^https?:\/\//i.test(u)) ? esc(u) : null;
+
+function bookingRow(b, dest){
+  const href = safeUrl(b.officialSite) || officialTicketsLink(b.what, b.channel, dest);
+  return `<div class="ticket-row${b.urgency?" ticket-row-warn":""}">
+    <a class="ticket${b.urgency?" warn":""}" target="_blank" rel="noreferrer" onclick="track('booking_link_clicked')" href="${href}">${b.urgency?"⚠️":"🎟"} ${esc(b.what)}${b.channel?` — book via ${esc(b.channel)}`:""} →</a>
+    <a class="ticket-alt" target="_blank" rel="noreferrer" onclick="track('booking_link_clicked')" href="${gygLink(b.what, dest)}">GetYourGuide</a>
+    ${b.urgency?`<span class="ticket-tip warn-tip">${esc(b.urgency)}</span>`:""}
+    ${b.tip?`<span class="ticket-tip">${esc(b.tip)}</span>`:""}
+  </div>`;
+}
+function collectUrgent(p){
+  if (p.multi) return (p.cities||[]).flatMap(c=>(c.days||[]).flatMap(d=>(d.bookings||[]).filter(b=>b&&b.urgency).map(b=>({b, dest:c.name}))));
+  return (p.days||[]).flatMap(d=>(d.bookings||[]).filter(b=>b&&b.urgency).map(b=>({b, dest:p.destination})));
+}
+const asapBox = p => {
+  const urgent = collectUrgent(p);
+  return urgent.length ? `<div class="asap"><div class="asap-title">⚠️ Book these ASAP — your agent flagged them</div>${urgent.map(u=>bookingRow(u.b, u.dest)).join("")}</div>` : "";
+};
 
 function hotelCard(h, primary){
   const dest = plan.destination;
@@ -771,6 +795,7 @@ function renderResult(){
     <div class="dossier-meta">${esc(p.destination)} · ${form.nights} nights · ${esc(form.travelers.toLowerCase())}${form.timing?" · "+esc(form.timing):""}</div>
     ${p.summary?`<p class="dossier-summary">${esc(p.summary)}</p>`:""}
   </div>`;
+  html += asapBox(p);
 
   if (p.hotels?.length){
     html += `<div class="section"><h2 class="section-title">Where you'll stay</h2>`;
@@ -795,7 +820,7 @@ function renderResult(){
       ${d.afternoon?`<p class="day-part"><b>PM</b>${esc(d.afternoon)}</p>`:""}
       ${d.evening?`<p class="day-part"><b>Eve</b>${esc(d.evening)}</p>`:""}
       ${d.note?`<p class="note" style="font-size:14px">${esc(d.note)}</p>`:""}
-      ${(d.bookings&&d.bookings.length)?`<div class="day-bookings">${d.bookings.map(b=>`<div class="ticket-row"><a class="ticket" target="_blank" rel="noreferrer" onclick="track('booking_link_clicked')" href="${officialTicketsLink(b.what, b.channel, p.destination)}">🎟 ${esc(b.what)}${b.channel?` — book via ${esc(b.channel)}`:""} →</a><a class="ticket-alt" target="_blank" rel="noreferrer" onclick="track('booking_link_clicked')" href="${gygLink(b.what, p.destination)}">GetYourGuide</a>${b.tip?`<span class="ticket-tip">${esc(b.tip)}</span>`:""}</div>`).join("")}</div>`:""}
+      ${(d.bookings&&d.bookings.length)?`<div class="day-bookings">${d.bookings.map(b=>bookingRow(b, p.destination)).join("")}</div>`:""}
       </div></div>`).join("") + `</div>`;
   }
   if (p.food?.length){
