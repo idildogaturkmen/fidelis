@@ -121,14 +121,23 @@ ${route ? `\nThis is the ${destination} leg of a multi-city trip (${route}).\n` 
 They are staying at: ${str(body.hotelName, 120) || "a central hotel"} in ${destination}. This stay: ${nights} night${nights === 1 ? "" : "s"}.
 
 Respond ONLY with valid JSON, no markdown. Schema:
-{"days":[cover all ${nights} night${nights === 1 ? "" : "s"} of this stay; if longer than 7 days, group some (e.g. "4-5"); each {"d":"1","title":"short day theme","morning":"specific, practical plan, under 30 words — name places, best times, how to get there","afternoon":"under 30 words","evening":"under 30 words","note":"one insider tip, under 20 words — timing tricks, dress codes, what to skip","bookings":[0-3 items ONLY where advance tickets or reservations genuinely matter, each {"what":"attraction or experience name","channel":"where locals actually book this — the official site or pass if one exists (e.g. 'muze.gov.tr', 'Müzekart', 'the venue's own site', 'call the restaurant'), else a trusted platform","tip":"under 12 words, e.g. 'timed entry — book 2-3 days ahead'","urgency":"ONLY for places famous for selling out: the honest lead time, e.g. 'often sold out 4+ weeks ahead' — omit this field otherwise","officialSite":"full official booking URL ONLY if it is world-famous and you are completely certain — omit if any doubt"}]}],"food":[5 items, real places in ${destination}, each {"name":"the restaurant's exact name as it appears on Google Maps","address":"street address","type":"cuisine / meal","why":"under 15 words, tied to their tastes"}],"worthKnowing":[0-3 items ONLY when you are confident, each {"item":"city tourist card/pass (e.g. Vienna City Card), or a real seasonal event during their dates","verdict":"under 16 words — for a pass: is it worth it for THIS itinerary, honestly; for an event: what and when"}]}
+{"days":[cover all ${nights} night${nights === 1 ? "" : "s"} of this stay; if longer than 7 days, group some (e.g. "4-5"); each {"d":"1","title":"short day theme","morning":"specific, practical plan, under 30 words — name places, best times, how to get there","afternoon":"under 30 words","evening":"under 30 words","note":"one insider tip, under 20 words — timing tricks, dress codes, what to skip","bookings":[0-3 items ONLY where advance tickets or reservations genuinely matter, each {"what":"attraction or experience name","channel":"where locals actually book this — the official site or pass if one exists (e.g. 'muze.gov.tr', 'Müzekart', 'the venue's own site', 'call the restaurant'), else a trusted platform","tip":"under 12 words, e.g. 'timed entry — book 2-3 days ahead'","urgency":"ONLY for places famous for selling out: the honest lead time, e.g. 'often sold out 4+ weeks ahead' — omit this field otherwise","officialSite":"full official booking URL ONLY if it is world-famous and you are completely certain — omit if any doubt"}]}]}
 REALISM RULES (these build trust — never break them):
-- worthKnowing: only city passes that genuinely exist and events you are sure recur during their timing — never invent one; omit the array entirely when unsure. Judge pass value against the actual itinerary you planned.
 - Attractions famous for selling out (Vatican Museums, Colosseum, Alhambra, Anne Frank House, the Last Supper, Sagrada Família, Uffizi, hot tasting-menu restaurants, and the like) MUST appear in bookings with an honest "urgency" — a plan that assumes you can walk in is a broken plan. Never invent URLs; omit officialSite unless certain.
 ${arrivalRule}
 ${departureRule}
 DENSITY BY PACE — their pace is ${f.pace}/5; hit this density honestly: 1-2 = one or two anchor activities per day with long, unhurried meals; 3 = two or three; 4 = three to five; 5 = four to six, packed, with quick meals. At pace 4-5, name multiple specific stops within each day-part; at pace 1-2, leave real gaps to wander.
-Every restaurant must be a real, currently-operating place that locals and reputable travel guides consistently praise — never invent one; if unsure it still operates, choose one you are certain about. Favor beloved spots over tourist traps. Match their vibes. Keep it tight.`;
+Match their vibes. Keep it tight.`;
+  }
+
+  if (action === "eat") {
+    return `You are Fidelis, an expert AI travel agent. Traveler profile:
+
+${profile}${extra}
+${route ? `\nThis is the ${destination} leg of a multi-city trip (${route}) — ${nights} night${nights === 1 ? "" : "s"} there.\n` : ""}
+Pick where they'll eat in ${destination}, and what's worth knowing. Respond ONLY with valid JSON, no markdown:
+{"food":[5 items, real places in ${destination}, each {"name":"the restaurant's exact name as it appears on Google Maps","address":"street address","type":"cuisine / meal","why":"under 15 words, tied to their tastes"}],"worthKnowing":[0-3 items ONLY when you are confident, each {"item":"city tourist card/pass (e.g. Vienna City Card), or a real seasonal event during their dates","verdict":"under 16 words — for a pass: is it honestly worth it for a ${nights}-night visit at pace ${f.pace}/5; for an event: what and when"}]}
+Every restaurant must be a real, currently-operating place that locals and reputable travel guides consistently praise — never invent one; if unsure it still operates, choose one you are certain about. Favor beloved spots over tourist traps. worthKnowing: only passes that genuinely exist and events you are sure recur during their timing — never invent one; omit the array entirely when unsure.`;
   }
 
   if (action === "veto") {
@@ -249,8 +258,9 @@ export default async (req, context) => {
   try {
     const prompt = buildPrompt(body.action, form, body);
     if (!prompt) return err(400, "Unknown action");
-    // days is the longest response (dense itineraries truncate at 2500 and break JSON parsing)
-    const budgets = { days: 3500, hotels: 2200, split: 1600, veto: 900 };
+    // days and eat run in parallel client-side — each must stay well under
+    // Netlify's function time limit (one combined call was timing out)
+    const budgets = { days: 2600, eat: 1400, hotels: 2200, split: 1600, veto: 900 };
     const out = await askClaude(prompt, key, budgets[body.action]);
     await resolvePlaces(out, process.env.GOOGLE_MAPS_API_KEY, out.destination || str(body.destination, 120));
     return Response.json(out);

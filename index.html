@@ -494,12 +494,11 @@ async function generate(extra){
     renderResult();
     show("result");
     try{
-      const part2 = await callAgent({
-        action:"days", form, extra,
-        destination: part1.destination,
-        hotelName: part1.hotels?.[0]?.name
-      });
-      plan = { ...plan, ...part2, _daysPending: false };
+      const [d, e] = await Promise.all([
+        callAgent({ action:"days", form, extra, destination: part1.destination, hotelName: part1.hotels?.[0]?.name }),
+        callAgent({ action:"eat", form, extra, destination: part1.destination })
+      ]);
+      plan = { ...plan, ...d, ...e, _daysPending: false };
     }catch(err){
       plan._daysPending = false;
       plan._daysError = err.message;
@@ -541,17 +540,20 @@ async function runCityChain(c, i, extra){
     const h = await callAgent({ action:"hotels", form, extra, destination: c.name, nights: c.nights, route });
     c.hotels = h.hotels; c._hotelsPending = false;
     renderResult();
-    const d = await callAgent({
-      action:"days", form, extra, destination: c.name, nights: c.nights, route,
-      hotelName: c.hotels?.[0]?.name,
-      isFirstCity: i === 0,
-      isLastCity: i === plan.cities.length - 1,
-      prevCity: plan.cities[i-1]?.name || "",
-      nextCity: plan.cities[i+1]?.name || "",
-      inboundMode: plan.legs[i-1]?.mode || "",
-      outboundMode: plan.legs[i]?.mode || ""
-    });
-    c.days = d.days; c.food = d.food; c.worthKnowing = d.worthKnowing;
+    const [d, e] = await Promise.all([
+      callAgent({
+        action:"days", form, extra, destination: c.name, nights: c.nights, route,
+        hotelName: c.hotels?.[0]?.name,
+        isFirstCity: i === 0,
+        isLastCity: i === plan.cities.length - 1,
+        prevCity: plan.cities[i-1]?.name || "",
+        nextCity: plan.cities[i+1]?.name || "",
+        inboundMode: plan.legs[i-1]?.mode || "",
+        outboundMode: plan.legs[i]?.mode || ""
+      }),
+      callAgent({ action:"eat", form, extra, destination: c.name, nights: c.nights, route })
+    ]);
+    c.days = d.days; c.food = e.food; c.worthKnowing = e.worthKnowing;
     c._daysPending = false;
   }catch(err){
     c._hotelsPending = false; c._daysPending = false;
@@ -569,12 +571,11 @@ async function retryCity(ci){
 async function retryDays(){
   plan._daysError = null; plan._daysPending = true; renderResult();
   try{
-    const part2 = await callAgent({
-      action:"days", form,
-      destination: plan.destination,
-      hotelName: plan.hotels?.[0]?.name
-    });
-    plan = { ...plan, ...part2, _daysPending: false };
+    const [d, e] = await Promise.all([
+      callAgent({ action:"days", form, destination: plan.destination, hotelName: plan.hotels?.[0]?.name }),
+      callAgent({ action:"eat", form, destination: plan.destination })
+    ]);
+    plan = { ...plan, ...d, ...e, _daysPending: false };
   }catch(err){
     plan._daysPending = false;
     plan._daysError = err.message;
