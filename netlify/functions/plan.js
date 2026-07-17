@@ -145,7 +145,7 @@ They rejected these hotels: ${str(body.rejected, 500)}. Suggest ONE different re
 /* ---------- Anthropic call: log details, surface only friendly text ---------- */
 class FriendlyError extends Error {}
 
-async function askClaude(prompt, key) {
+async function askClaude(prompt, key, maxTokens) {
   const res = await fetch(API, {
     method: "POST",
     headers: {
@@ -155,7 +155,7 @@ async function askClaude(prompt, key) {
     },
     body: JSON.stringify({
       model: "claude-sonnet-4-6",
-      max_tokens: 2500,
+      max_tokens: maxTokens || 2500,
       messages: [{ role: "user", content: prompt }],
     }),
   });
@@ -249,7 +249,9 @@ export default async (req, context) => {
   try {
     const prompt = buildPrompt(body.action, form, body);
     if (!prompt) return err(400, "Unknown action");
-    const out = await askClaude(prompt, key);
+    // days is the longest response (dense itineraries truncate at 2500 and break JSON parsing)
+    const budgets = { days: 3500, hotels: 2200, split: 1600, veto: 900 };
+    const out = await askClaude(prompt, key, budgets[body.action]);
     await resolvePlaces(out, process.env.GOOGLE_MAPS_API_KEY, out.destination || str(body.destination, 120));
     return Response.json(out);
   } catch (e) {
