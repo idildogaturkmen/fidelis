@@ -3,7 +3,7 @@ const API = "https://api.anthropic.com/v1/messages";
 
 /* ---------- abuse protection ---------- */
 const MAX_BODY_BYTES = 10_000; // real quiz payloads are ~1-2 KB
-const RATE_LIMIT = 20; // requests per window per IP (a full plan = 2 requests)
+const RATE_LIMIT = 30; // requests per window per IP (a 3-city trip = 7 requests)
 const RATE_WINDOW_MS = 10 * 60 * 1000;
 const hits = new Map(); // per-instance memory: resets on cold start, which is fine for basic protection
 
@@ -78,30 +78,54 @@ function buildPrompt(action, f, body) {
   const extraText = str(body.extra, 400);
   const extra = extraText
     ? `\nIMPORTANT adjustment from the traveler: "${extraText}". Honor it.` : "";
+  const nights = num(body.nights, 1, 30, f.nights); // per-city override on multi-city trips
+  const route = str(body.route, 300);
+
+  if (action === "split") {
+    const cities = Array.isArray(body.cities) ? body.cities.slice(0, 6).map(c => str(c, 60)).filter(Boolean) : [];
+    if (cities.length < 2) return null;
+    return `You are Fidelis, an expert AI travel agent. A traveler is planning ONE multi-city trip: ${cities.join(" → ")}. Total: ${f.nights} nights. Their profile:
+
+${profile}${extra}
+
+Decide how to split the nights (weight each city by how much it deserves for THEIR interests) and how to travel between cities. Reorder cities only if the route is clearly smarter. Respond ONLY with valid JSON, no markdown:
+{"tripTitle":"evocative title, max 6 words","summary":"2 warm sentences, second person, about the whole route","cities":[in travel order, each {"name":"city, country","nights":N,"why":"under 12 words — why this many nights"}],"legs":[one per hop between consecutive cities, each {"from":"city","to":"city","mode":"train/bus/flight/ferry","duration":"e.g. ~2h40","tip":"under 15 words — real operators + where to book, e.g. 'ÖBB Railjet; book on oebb.at or omio'"}]}
+Nights must sum to exactly ${f.nights}. Every leg must be a route that actually runs.`;
+  }
 
   if (action === "hotels") {
     return `You are Fidelis, an expert AI travel agent. A traveler filled out your intake quiz:
 
 ${profile}${extra}
-
+${route ? `\nThis stay is one leg of a multi-city trip (${route}). Plan hotels for ${destination} ONLY — ${nights} night${nights === 1 ? "" : "s"} there.\n` : ""}
 Respond ONLY with valid JSON — no markdown, no preamble. Schema:
 {"destination":"city, country you are planning for","tripTitle":"evocative title, max 6 words","summary":"2 warm sentences, second person, referencing their preferences","hotels":[3 items, best pick FIRST, each {"name":"the hotel's exact name as it appears on Google Maps","address":"street address","area":"neighborhood","pricePerNight":"e.g. $150-190","style":"3-word description","why":"1-2 sentences explaining why YOU chose it, referencing their stated preferences","matches":["2-3 of their must-haves or priorities it satisfies"]}]}
 Be decisive — you are choosing FOR them. Every hotel must be a real, currently-operating, well-reviewed place you are confident exists and is findable on Google Maps — if unsure a place still operates, pick one you are sure about instead. Prices are honest estimates. Keep every string concise.`;
   }
 
   if (action === "days") {
+    const isFirst = body.isFirstCity !== false;
+    const isLast = body.isLastCity !== false;
+    const prevCity = str(body.prevCity, 60), nextCity = str(body.nextCity, 60);
+    const inboundMode = str(body.inboundMode, 20), outboundMode = str(body.outboundMode, 20);
+    const arrivalRule = isFirst
+      ? `- Day 1 must match their arrival time (${f.arrivalTime || "unspecified"}). Evening or late-night arrival = ONLY the transfer in, an easy near-hotel dinner, and rest — nothing ambitious. Any arrival: budget the airport-to-city transfer and, for international arrivals, a passport-queue buffer before the first real activity.`
+      : `- Day 1 starts with the ${inboundMode || "journey"} in from ${prevCity || "the previous city"} — budget that arrival and hotel drop-off before any activity.`;
+    const departureRule = isLast
+      ? `- The final day must respect their departure time (${f.departureTime || "unspecified"}). Early-morning = nothing after breakfast and checkout; midday = at most one light stop near the hotel.`
+      : `- The final day must include catching the onward ${outboundMode || "transport"} to ${nextCity || "the next city"} — plan around it, nothing ambitious after midday.`;
     return `You are Fidelis, an expert AI travel agent. Traveler profile:
 
 ${profile}${extra}
-
-They are staying at: ${str(body.hotelName, 120) || "a central hotel"} in ${destination}. Trip length: ${f.nights} nights.
+${route ? `\nThis is the ${destination} leg of a multi-city trip (${route}).\n` : ""}
+They are staying at: ${str(body.hotelName, 120) || "a central hotel"} in ${destination}. This stay: ${nights} night${nights === 1 ? "" : "s"}.
 
 Respond ONLY with valid JSON, no markdown. Schema:
-{"days":[cover the WHOLE trip; if longer than 7 days, group some (e.g. "4-5"); each {"d":"1","title":"short day theme","morning":"specific, practical plan, under 30 words — name places, best times, how to get there","afternoon":"under 30 words","evening":"under 30 words","note":"one insider tip, under 20 words — timing tricks, dress codes, what to skip","bookings":[0-3 items ONLY where advance tickets or reservations genuinely matter, each {"what":"attraction or experience name","channel":"where locals actually book this — the official site or pass if one exists (e.g. 'muze.gov.tr', 'Müzekart', 'the venue's own site', 'call the restaurant'), else a trusted platform","tip":"under 12 words, e.g. 'timed entry — book 2-3 days ahead'","urgency":"ONLY for places famous for selling out: the honest lead time, e.g. 'often sold out 4+ weeks ahead' — omit this field otherwise","officialSite":"full official booking URL ONLY if it is world-famous and you are completely certain — omit if any doubt"}]}],"food":[5 items, real places in ${destination}, each {"name":"the restaurant's exact name as it appears on Google Maps","address":"street address","type":"cuisine / meal","why":"under 15 words, tied to their tastes"}]}
+{"days":[cover all ${nights} night${nights === 1 ? "" : "s"} of this stay; if longer than 7 days, group some (e.g. "4-5"); each {"d":"1","title":"short day theme","morning":"specific, practical plan, under 30 words — name places, best times, how to get there","afternoon":"under 30 words","evening":"under 30 words","note":"one insider tip, under 20 words — timing tricks, dress codes, what to skip","bookings":[0-3 items ONLY where advance tickets or reservations genuinely matter, each {"what":"attraction or experience name","channel":"where locals actually book this — the official site or pass if one exists (e.g. 'muze.gov.tr', 'Müzekart', 'the venue's own site', 'call the restaurant'), else a trusted platform","tip":"under 12 words, e.g. 'timed entry — book 2-3 days ahead'","urgency":"ONLY for places famous for selling out: the honest lead time, e.g. 'often sold out 4+ weeks ahead' — omit this field otherwise","officialSite":"full official booking URL ONLY if it is world-famous and you are completely certain — omit if any doubt"}]}],"food":[5 items, real places in ${destination}, each {"name":"the restaurant's exact name as it appears on Google Maps","address":"street address","type":"cuisine / meal","why":"under 15 words, tied to their tastes"}]}
 REALISM RULES (these build trust — never break them):
 - Attractions famous for selling out (Vatican Museums, Colosseum, Alhambra, Anne Frank House, the Last Supper, Sagrada Família, Uffizi, hot tasting-menu restaurants, and the like) MUST appear in bookings with an honest "urgency" — a plan that assumes you can walk in is a broken plan. Never invent URLs; omit officialSite unless certain.
-- Day 1 must match their arrival time (${f.arrivalTime || "unspecified"}). Evening or late-night arrival = ONLY the transfer in, an easy near-hotel dinner, and rest — nothing ambitious. Any arrival: budget the airport-to-city transfer and, for international arrivals, a passport-queue buffer before the first real activity.
-- The final day must respect their departure time (${f.departureTime || "unspecified"}). Early-morning = nothing after breakfast and checkout; midday = at most one light stop near the hotel.
+${arrivalRule}
+${departureRule}
 DENSITY BY PACE — their pace is ${f.pace}/5; hit this density honestly: 1-2 = one or two anchor activities per day with long, unhurried meals; 3 = two or three; 4 = three to five; 5 = four to six, packed, with quick meals. At pace 4-5, name multiple specific stops within each day-part; at pace 1-2, leave real gaps to wander.
 Every restaurant must be a real, currently-operating place that locals and reputable travel guides consistently praise — never invent one; if unsure it still operates, choose one you are certain about. Favor beloved spots over tourist traps. Match their vibes. Keep it tight.`;
   }

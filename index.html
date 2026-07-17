@@ -137,6 +137,11 @@ input[type=range]{flex:1;accent-color:var(--sea);}
 .warn-tip{color:var(--sun-deep);font-weight:700;}
 .asap{background:#FDF3E3;border:2px solid var(--sun);border-radius:16px;padding:18px 20px;margin-top:18px;display:flex;flex-direction:column;gap:7px;}
 .asap-title{font-weight:700;font-size:15px;}
+/* multi-city */
+.city-title{color:var(--sea);}
+.city-why{margin-top:6px;color:#4A6970;font-size:14px;font-style:italic;}
+.leg{background:var(--mist);border-radius:14px;padding:14px 18px;margin-top:22px;font-size:14px;line-height:1.6;}
+.leg-tip{display:block;color:#4A6970;font-size:13px;}
 .mytrips{margin-left:auto;font:700 13px 'Karla',sans-serif;color:var(--sea);text-decoration:none;}
 .mytrips:hover{text-decoration:underline;}
 .trip-item{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;background:var(--card);border:1.5px solid var(--line);border-radius:14px;padding:16px 18px;margin-top:12px;text-decoration:none;color:var(--ink);}
@@ -468,7 +473,17 @@ async function callAgent(payload){
   }
   return data;
 }
+/* Multi-city detection: " and "/" & " joins, or 3+ comma-separated parts.
+   Two comma parts stay single-city ("Istanbul, Türkiye" is a city + country). */
+function parseCities(dest){
+  const norm = (dest || "").replace(/ & /gi, " and ");
+  const parts = norm.split(/ and |,/i).map(s=>s.trim()).filter(Boolean);
+  if (parts.length >= 2 && (/ and /i.test(norm) || parts.length >= 3)) return parts.slice(0, 6);
+  return null;
+}
 async function generate(extra){
+  const cityNames = parseCities(form.destination);
+  if (cityNames) return generateMulti(cityNames, extra);
   show("loading");
   try{
     $("loadMsg").textContent = "Choosing where you'll stay…";
@@ -495,6 +510,60 @@ async function generate(extra){
     show("error");
   }
 }
+async function generateMulti(cityNames, extra){
+  show("loading");
+  $("loadMsg").textContent = "Splitting your nights across " + cityNames.length + " cities…";
+  try{
+    const split = await callAgent({ action:"split", form, extra, cities: cityNames });
+    if (!split.cities || split.cities.length < 2) throw new Error("Your agent couldn't split this route — try naming the cities more plainly, e.g. \"Vienna, Budapest, Bratislava\".");
+    plan = {
+      multi: true,
+      destination: split.cities.map(c=>(c.name||"").split(",")[0]).join(" · "),
+      tripTitle: split.tripTitle, summary: split.summary,
+      legs: split.legs || [],
+      cities: split.cities.map(c => ({ name: c.name, nights: c.nights, why: c.why, _hotelsPending: true, _daysPending: true }))
+    };
+    renderResult(); show("result");
+    await Promise.all(plan.cities.map((c, i) => runCityChain(c, i, extra)));
+    renderResult();
+    stashPlan();
+    track(extra ? "plan_redone" : "plan_generated");
+  }catch(e){
+    $("errMsg").textContent = e.message;
+    show("error");
+  }
+}
+async function runCityChain(c, i, extra){
+  const route = plan.cities.map(x=>x.name).join(" → ");
+  try{
+    const h = await callAgent({ action:"hotels", form, extra, destination: c.name, nights: c.nights, route });
+    c.hotels = h.hotels; c._hotelsPending = false;
+    renderResult();
+    const d = await callAgent({
+      action:"days", form, extra, destination: c.name, nights: c.nights, route,
+      hotelName: c.hotels?.[0]?.name,
+      isFirstCity: i === 0,
+      isLastCity: i === plan.cities.length - 1,
+      prevCity: plan.cities[i-1]?.name || "",
+      nextCity: plan.cities[i+1]?.name || "",
+      inboundMode: plan.legs[i-1]?.mode || "",
+      outboundMode: plan.legs[i]?.mode || ""
+    });
+    c.days = d.days; c.food = d.food; c.worthKnowing = d.worthKnowing;
+    c._daysPending = false;
+  }catch(err){
+    c._hotelsPending = false; c._daysPending = false;
+    c._error = err.message;
+  }
+  renderResult();
+}
+async function retryCity(ci){
+  const c = plan.cities[ci];
+  c._error = null; c._hotelsPending = !c.hotels?.length; c._daysPending = true;
+  renderResult();
+  await runCityChain(c, ci);
+  stashPlan();
+}
 async function retryDays(){
   plan._daysError = null; plan._daysPending = true; renderResult();
   try{
@@ -511,19 +580,21 @@ async function retryDays(){
   renderResult();
   stashPlan();
 }
-async function vetoPrimary(btn){
+async function vetoPrimary(btn, ci){
   btn.disabled = true; btn.textContent = "Finding another…";
+  const target = (plan.multi && ci >= 0) ? plan.cities[ci] : plan;
+  const dest = (plan.multi && ci >= 0) ? target.name : plan.destination;
   try{
-    const oldName = plan.hotels[0]?.name;
+    const oldName = target.hotels[0]?.name;
     const out = await callAgent({
       action:"veto", form,
-      destination: plan.destination,
-      rejected: plan.hotels.map(h=>h.name).join("; ")
+      destination: dest,
+      rejected: target.hotels.map(h=>h.name).join("; ")
     });
-    plan.hotels = [out.hotel, ...plan.hotels.slice(1)];
-    if (oldName && out.hotel?.name && plan.days){
+    target.hotels = [out.hotel, ...target.hotels.slice(1)];
+    if (oldName && out.hotel?.name && target.days){
       const swap = s => s ? s.split(oldName).join(out.hotel.name) : s;
-      plan.days = plan.days.map(d => ({ ...d, morning: swap(d.morning), afternoon: swap(d.afternoon), evening: swap(d.evening), note: swap(d.note) }));
+      target.days = target.days.map(d => ({ ...d, morning: swap(d.morning), afternoon: swap(d.afternoon), evening: swap(d.evening), note: swap(d.note) }));
     }
     renderResult();
     stashPlan();
@@ -543,6 +614,30 @@ function planAsText(){
   lines.push(`${p.tripTitle || p.destination} — planned by fidelis`);
   lines.push(`${p.destination} · ${form.nights} nights${form.timing ? " · " + form.timing : ""}`);
   if (p.summary) lines.push("", p.summary);
+  if (p.multi){
+    (p.cities||[]).forEach((c, i)=>{
+      lines.push("", "—— " + (c.name||"").toUpperCase() + " · " + c.nights + " NIGHT" + (c.nights==1?"":"S") + " ——");
+      const h = c.hotels?.[0];
+      if (h){
+        lines.push(`STAY: ${h.name} (${h.area || ""}, ${h.pricePerNight}/night)`);
+        if (h.address) lines.push(h.address);
+      }
+      (c.days||[]).forEach(d=>{
+        lines.push("", `DAY ${d.d} — ${d.title}`);
+        if (d.morning) lines.push(`AM: ${d.morning}`);
+        if (d.afternoon) lines.push(`PM: ${d.afternoon}`);
+        if (d.evening) lines.push(`EVE: ${d.evening}`);
+      });
+      if (c.food?.length){
+        lines.push("", "EAT:");
+        c.food.forEach(f=>lines.push(`• ${f.name} (${f.type})${f.address ? " — " + f.address : ""}`));
+      }
+      const leg = (p.legs||[])[i];
+      if (leg && i < p.cities.length - 1) lines.push("", `➜ ${leg.from} → ${leg.to}: ${leg.mode}${leg.duration ? " " + leg.duration : ""}${leg.tip ? " — " + leg.tip : ""}`);
+    });
+    lines.push("", "Made with fidelis — fidelisapp.netlify.app");
+    return lines.join("\n");
+  }
   if (p.hotels?.length){
     const h = p.hotels[0];
     lines.push("", `STAY: ${h.name} (${h.area}, ${h.pricePerNight}/night)`);
@@ -765,8 +860,8 @@ const asapBox = p => {
   return urgent.length ? `<div class="asap"><div class="asap-title">⚠️ Book these ASAP — your agent flagged them</div>${urgent.map(u=>bookingRow(u.b, u.dest)).join("")}</div>` : "";
 };
 
-function hotelCard(h, primary){
-  const dest = plan.destination;
+function hotelCard(h, primary, cityDest, ci){
+  const dest = cityDest || plan.destination;
   return `<div class="hotel ${primary?"primary":""}">
     ${primary?'<span class="badge">Your agent\'s pick</span>':""}
     <div class="hotel-top">
@@ -783,10 +878,37 @@ function hotelCard(h, primary){
       <a class="book alt" target="_blank" rel="noreferrer" onclick="track('booking_link_clicked')" href="${bookingLink(h.name, dest)}">Booking.com</a>
       <a class="map-link reviews" target="_blank" rel="noreferrer" href="${placeMaps(h, dest)}">Maps</a>
       <a class="map-link reviews" target="_blank" rel="noreferrer" href="${tripadvisorLink(h.name+" "+(dest||""))}">Reviews →</a>
-      ${primary?'<button class="veto" onclick="vetoPrimary(this)">Not this one</button>':""}
+      ${primary?`<button class="veto" onclick="vetoPrimary(this, ${ci === undefined ? -1 : ci})">Not this one</button>`:""}
     </div>
   </div>`;
 }
+/* shared render pieces — used by both single- and multi-city dossiers */
+const pendingBlock = t => `<div class="pending"><div class="compass" aria-hidden="true"></div><p>${t}</p></div>`;
+function daysHtml(days, dest){
+  return `<div class="section"><h2 class="section-title">Your days, mapped</h2>` + days.map(d=>`
+      <div class="day"><div class="day-num">Day ${esc(d.d)}</div>
+      <div class="day-body"><h4>${esc(d.title)}</h4>
+      ${d.morning?`<p class="day-part"><b>AM</b>${esc(d.morning)}</p>`:""}
+      ${d.afternoon?`<p class="day-part"><b>PM</b>${esc(d.afternoon)}</p>`:""}
+      ${d.evening?`<p class="day-part"><b>Eve</b>${esc(d.evening)}</p>`:""}
+      ${d.note?`<p class="note" style="font-size:14px">${esc(d.note)}</p>`:""}
+      ${(d.bookings&&d.bookings.length)?`<div class="day-bookings">${d.bookings.map(b=>bookingRow(b, dest)).join("")}</div>`:""}
+      </div></div>`).join("") + `</div>`;
+}
+function foodHtml(food, dest){
+  return `<div class="section"><h2 class="section-title">Where you'll eat</h2><div class="food">` + food.map(f=>`
+      <div class="food-card"><h4>${esc(f.name)}</h4><div class="food-type">${esc(f.type)}</div>
+      ${stars(f)}
+      <p>${esc(f.why)}</p>
+      ${f.address?`<p class="food-addr">${esc(f.address)}</p>`:""}
+      <div class="food-links">
+        <a class="map-link" target="_blank" rel="noreferrer" href="${placeMaps(f, dest)}">Maps →</a>
+        <a class="map-link" target="_blank" rel="noreferrer" href="${yelpLink(f.name, dest)}">Yelp</a>
+      </div></div>`).join("") + `</div></div>`;
+}
+const legHtml = l => `<div class="leg">🚆 <b>${esc(l.from)} → ${esc(l.to)}</b> · ${esc(l.mode)}${l.duration?" · "+esc(l.duration):""}${l.tip?`<span class="leg-tip">${esc(l.tip)}</span>`:""}
+  <a class="ticket-alt" target="_blank" rel="noreferrer" onclick="track('booking_link_clicked')" href="${officialTicketsLink(l.from+" to "+l.to, l.mode, "")}">Find tickets →</a></div>`;
+
 function renderResult(){
   const p = plan;
   let html = `<div class="dossier">
@@ -797,6 +919,31 @@ function renderResult(){
   </div>`;
   html += asapBox(p);
 
+  if (p.multi){
+    (p.cities||[]).forEach((c, ci) => {
+      html += `<div class="section city-block"><h2 class="section-title city-title">${esc(c.name)} · ${c.nights} night${c.nights==1?"":"s"}</h2>`;
+      if (c.why) html += `<p class="city-why">${esc(c.why)}</p>`;
+      if (c._error){
+        html += `<div class="errbox"><p>${esc(c._error)}</p>
+          <div class="hotel-actions"><button class="next" onclick="retryCity(${ci})">Try ${esc((c.name||"").split(",")[0])} again</button></div></div>`;
+      } else {
+        if (c._hotelsPending) html += pendingBlock(`Choosing where you'll stay in ${esc((c.name||"").split(",")[0])}…`);
+        if (c.hotels?.length){
+          html += hotelCard(c.hotels[0], true, c.name, ci);
+          if (c.hotels.length > 1) html += `<div class="backups">${c.hotels.slice(1).map(h=>hotelCard(h,false,c.name,ci)).join("")}</div>`;
+        }
+        if (!c._hotelsPending && c._daysPending) html += pendingBlock(`Mapping your days in ${esc((c.name||"").split(",")[0])}…`);
+        if (c.days?.length) html += daysHtml(c.days, c.name);
+        if (c.food?.length) html += foodHtml(c.food, c.name);
+      }
+      html += `</div>`;
+      const leg = (p.legs||[])[ci];
+      if (leg && ci < p.cities.length - 1) html += legHtml(leg);
+    });
+    $("resultBody").innerHTML = html;
+    return;
+  }
+
   if (p.hotels?.length){
     html += `<div class="section"><h2 class="section-title">Where you'll stay</h2>`;
     html += hotelCard(p.hotels[0], true);
@@ -804,36 +951,14 @@ function renderResult(){
     html += `</div>`;
   }
   if (p._daysPending){
-    html += `<div class="section"><h2 class="section-title">Your days, mapped</h2>
-      <div class="pending"><div class="compass" aria-hidden="true"></div>
-      <p>Your agent is mapping your days and picking where you'll eat — they'll appear right here in a moment.</p></div></div>`;
+    html += `<div class="section"><h2 class="section-title">Your days, mapped</h2>${pendingBlock("Your agent is mapping your days and picking where you'll eat — they'll appear right here in a moment.")}</div>`;
   } else if (p._daysError){
     html += `<div class="section"><h2 class="section-title">Your days, mapped</h2>
       <div class="errbox"><p>${esc(p._daysError)}</p>
       <div class="hotel-actions"><button class="next" onclick="retryDays()">Map my days</button></div></div></div>`;
   }
-  if (p.days?.length){
-    html += `<div class="section"><h2 class="section-title">Your days, mapped</h2>` + p.days.map(d=>`
-      <div class="day"><div class="day-num">Day ${esc(d.d)}</div>
-      <div class="day-body"><h4>${esc(d.title)}</h4>
-      ${d.morning?`<p class="day-part"><b>AM</b>${esc(d.morning)}</p>`:""}
-      ${d.afternoon?`<p class="day-part"><b>PM</b>${esc(d.afternoon)}</p>`:""}
-      ${d.evening?`<p class="day-part"><b>Eve</b>${esc(d.evening)}</p>`:""}
-      ${d.note?`<p class="note" style="font-size:14px">${esc(d.note)}</p>`:""}
-      ${(d.bookings&&d.bookings.length)?`<div class="day-bookings">${d.bookings.map(b=>bookingRow(b, p.destination)).join("")}</div>`:""}
-      </div></div>`).join("") + `</div>`;
-  }
-  if (p.food?.length){
-    html += `<div class="section"><h2 class="section-title">Where you'll eat</h2><div class="food">` + p.food.map(f=>`
-      <div class="food-card"><h4>${esc(f.name)}</h4><div class="food-type">${esc(f.type)}</div>
-      ${stars(f)}
-      <p>${esc(f.why)}</p>
-      ${f.address?`<p class="food-addr">${esc(f.address)}</p>`:""}
-      <div class="food-links">
-        <a class="map-link" target="_blank" rel="noreferrer" href="${placeMaps(f, p.destination)}">Maps →</a>
-        <a class="map-link" target="_blank" rel="noreferrer" href="${yelpLink(f.name, p.destination)}">Yelp</a>
-      </div></div>`).join("") + `</div></div>`;
-  }
+  if (p.days?.length) html += daysHtml(p.days, p.destination);
+  if (p.food?.length) html += foodHtml(p.food, p.destination);
   $("resultBody").innerHTML = html;
 }
 </script>
