@@ -102,7 +102,8 @@ REALISM RULES (these build trust — never break them):
 - Attractions famous for selling out (Vatican Museums, Colosseum, Alhambra, Anne Frank House, the Last Supper, Sagrada Família, Uffizi, hot tasting-menu restaurants, and the like) MUST appear in bookings with an honest "urgency" — a plan that assumes you can walk in is a broken plan. Never invent URLs; omit officialSite unless certain.
 - Day 1 must match their arrival time (${f.arrivalTime || "unspecified"}). Evening or late-night arrival = ONLY the transfer in, an easy near-hotel dinner, and rest — nothing ambitious. Any arrival: budget the airport-to-city transfer and, for international arrivals, a passport-queue buffer before the first real activity.
 - The final day must respect their departure time (${f.departureTime || "unspecified"}). Early-morning = nothing after breakfast and checkout; midday = at most one light stop near the hotel.
-Every restaurant must be a real, currently-operating place that locals and reputable travel guides consistently praise — never invent one; if unsure it still operates, choose one you are certain about. Favor beloved spots over tourist traps. Match their pace (${f.pace}/5) and vibes. Keep it tight.`;
+DENSITY BY PACE — their pace is ${f.pace}/5; hit this density honestly: 1-2 = one or two anchor activities per day with long, unhurried meals; 3 = two or three; 4 = three to five; 5 = four to six, packed, with quick meals. At pace 4-5, name multiple specific stops within each day-part; at pace 1-2, leave real gaps to wander.
+Every restaurant must be a real, currently-operating place that locals and reputable travel guides consistently praise — never invent one; if unsure it still operates, choose one you are certain about. Favor beloved spots over tourist traps. Match their vibes. Keep it tight.`;
   }
 
   if (action === "veto") {
