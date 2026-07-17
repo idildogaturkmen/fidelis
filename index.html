@@ -203,6 +203,10 @@ input[type=range]{flex:1;accent-color:var(--sea);}
         <input id="timing" class="input" placeholder="e.g. mid-September, or 'sometime this fall'" />
       </div>
       <div class="field row">
+        <div><label class="label">When do you arrive? <small>— day 1</small></label><div class="chips" id="chips-arrivalTime"></div></div>
+        <div><label class="label">When do you head home? <small>— last day</small></label><div class="chips" id="chips-departureTime"></div></div>
+      </div>
+      <div class="field row">
         <div><label class="label">Who's going?</label><div class="chips" id="chips-travelers"></div></div>
         <div><label class="label" for="groupSize">How many people?</label><input id="groupSize" class="input" type="number" min="1" max="20" value="2" /></div>
       </div>
@@ -354,6 +358,8 @@ const OPTS = {
   roomNeeds: ["Non-smoking","Smoking-friendly","Bringing a pet","Separate beds","Step-free / accessible","Connecting rooms"],
   transport: ["Mostly walking","Public transit","Taxis / rideshare","Renting a car"],
   occasion: ["Just because","Anniversary","Honeymoon","Birthday","Proposal","Celebrating something"],
+  arrivalTime: ["Morning","Afternoon","Evening","Late night"],
+  departureTime: ["Early morning","Midday","Afternoon","Evening","Night"],
 };
 const MULTI = new Set(["splurge","vibes","stayType","mustHaves","roomNeeds"]);
 const form = {
@@ -361,6 +367,7 @@ const form = {
   travelers:"Couple", groupSize:2, budget:"Comfortable", budgetNumber:"",
   splurge:[], vibes:[], pace:3, dietary:"", foodStyle:"A bit of both",
   stayType:[], mustHaves:[], roomNeeds:[], transport:"", occasion:"",
+  arrivalTime:"", departureTime:"",
   dealbreakers:"", brief:"",
 };
 let step = 0, plan = null;
