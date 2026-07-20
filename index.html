@@ -368,17 +368,17 @@ const OPTS = {
   stayType: ["Boutique hotel","Well-known hotel","Apartment","Resort","B&B / guesthouse","Surprise me"],
   mustHaves: ["Walkable location","Great view","Pool","Quiet at night","Breakfast included","Kitchen","Gym","Spa"],
   roomNeeds: ["Non-smoking","Smoking-friendly","Bringing a pet","Separate beds","Step-free / accessible","Connecting rooms"],
-  transport: ["Mostly walking","Public transit","Taxis / rideshare","Renting a car"],
+  transport: ["Mostly walking","Public transit","Taxis / rideshare","Renting a car","Cycling"],
   occasion: ["Just because","Anniversary","Honeymoon","Birthday","Proposal","Celebrating something"],
   arrivalTime: ["Morning","Afternoon","Evening","Late night"],
   departureTime: ["Early morning","Midday","Afternoon","Evening","Night"],
 };
-const MULTI = new Set(["splurge","vibes","stayType","mustHaves","roomNeeds"]);
+const MULTI = new Set(["splurge","vibes","stayType","mustHaves","roomNeeds","transport"]);
 const form = {
   destination:"", flexible:false, origin:"", nights:4, timing:"",
   travelers:"Couple", groupSize:2, budget:"Comfortable", budgetNumber:"",
   splurge:[], vibes:[], pace:3, dietary:"", foodStyle:"A bit of both",
-  stayType:[], mustHaves:[], roomNeeds:[], transport:"", occasion:"",
+  stayType:[], mustHaves:[], roomNeeds:[], transport:[], occasion:"",
   arrivalTime:"", departureTime:"",
   dealbreakers:"", brief:"",
 };

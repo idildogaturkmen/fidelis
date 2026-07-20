@@ -43,7 +43,7 @@ function cleanForm(f) {
     stayType: list(f.stayType, 40),
     mustHaves: list(f.mustHaves, 40),
     roomNeeds: list(f.roomNeeds, 40),
-    transport: str(f.transport, 40),
+    transport: list(f.transport, 40),
     occasion: str(f.occasion, 40),
     arrivalTime: str(f.arrivalTime, 30),
     departureTime: str(f.departureTime, 30),
@@ -66,7 +66,7 @@ function profileText(f, destOverride) {
     `Food adventurousness: ${f.foodStyle}. Dietary needs: ${f.dietary || "none stated"}`,
     `Stay type: ${(f.stayType || []).join(", ") || "open"}. Must-haves: ${(f.mustHaves || []).join(", ") || "none stated"}`,
     `Room needs (hard requirements — never pick a hotel that can't meet them): ${(f.roomNeeds || []).join(", ") || "none stated"}`,
-    `Getting around: ${f.transport || "no preference"}. Occasion: ${f.occasion || "not specified"}`,
+    `Getting around (respect this mix — cluster stops so the plan flows with these modes): ${(f.transport || []).join(", ") || "no preference"}. Occasion: ${f.occasion || "not specified"}`,
     `Dealbreakers: ${f.dealbreakers || "none stated"}`,
     `Their own words (most important — honor this above all): "${f.brief || "nothing extra"}"`,
   ].join("\n");
